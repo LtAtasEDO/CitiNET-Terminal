@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CitiNet terminal">
+  <rect width="512" height="512" rx="56" fill="#080d12"/>
+  <rect x="58" y="76" width="396" height="278" rx="24" fill="#101c24" stroke="#ffd447" stroke-width="22"/>
+  <path d="M98 130h316M98 176h198" fill="none" stroke="#23dbe0" stroke-width="20" stroke-linecap="round"/>
+  <path d="m118 242 42 36-42 36M196 314h92" fill="none" stroke="#ffd447" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M206 354v52h100v-52M160 424h192" fill="none" stroke="#23dbe0" stroke-width="22" stroke-linecap="round"/>
+</svg>

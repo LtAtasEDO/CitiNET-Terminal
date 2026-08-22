@@ -1,0 +1,59 @@
+{
+  "id": "citinet-terminal",
+  "title": "CitiNet Terminal™",
+  "description": "Offline or roleplay-online computer terminals for Cyberpunk RED with GM-authored inboxes, focused CitiNet information pages, randomized local files, Memory Chip-validated Shard exports, Autofixer-style vehicle purchases, Netrunner-aware trace states, and optional Hexcode Breach Lite locks.",
+  "version": "0.7.5-beta.1",
+  "authors": [
+    {
+      "name": "Lt Atlas"
+    }
+  ],
+  "compatibility": {
+    "minimum": "12",
+    "verified": "12.343",
+    "maximum": "12"
+  },
+  "relationships": {
+    "systems": [
+      {
+        "id": "cyberpunk-red-core",
+        "type": "system",
+        "compatibility": {
+          "minimum": "0.92.1",
+          "verified": "0.92.4"
+        }
+      }
+    ],
+    "recommends": [
+      {
+        "id": "foundryvtt-simple-calendar",
+        "type": "module",
+        "compatibility": {
+          "minimum": "2.4.17",
+          "verified": "2.4.18"
+        }
+      },
+      {
+        "id": "monks-active-tiles",
+        "type": "module"
+      },
+      {
+        "id": "hexcode-breach-lite",
+        "type": "module",
+        "compatibility": {
+          "minimum": "1.0.0"
+        }
+      }
+    ]
+  },
+  "esmodules": [
+    "scripts/citinet-terminal.js"
+  ],
+  "styles": [
+    "styles/citinet-terminal.css"
+  ],
+  "socket": true,
+  "readme": "README.md",
+  "manifest": "",
+  "download": ""
+}

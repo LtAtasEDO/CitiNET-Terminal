@@ -1,0 +1,40 @@
+<div class="citinet-shell {{#if traced}}is-traced{{/if}}" data-terminal-id="{{terminal.id}}">
+  <header class="citinet-browserbar">
+    <div class="citinet-browser-controls">
+      <button type="button" data-action="back" {{#unless canBack}}disabled{{/unless}} title="Back"><i class="fas fa-arrow-left"></i></button>
+      <button type="button" data-action="forward" {{#unless canForward}}disabled{{/unless}} title="Forward"><i class="fas fa-arrow-right"></i></button>
+      <button type="button" data-action="home" title="Home"><i class="fas fa-home"></i></button>
+    </div>
+    <div class="citinet-address"><i class="fas fa-lock"></i> {{addressScheme}}://{{terminal.slug}}/{{route}}</div>
+    <div class="citinet-signal {{#if connection.online}}is-online{{else}}is-cached{{/if}}"><i class="fas {{connection.icon}}"></i> {{connection.label}}</div>
+  </header>
+
+  <header class="citinet-terminal-head">
+    <div><div class="citinet-kicker">{{terminal.subtitle}}</div><h1>{{terminal.name}}</h1></div>
+    {{#if trace.enabled}}
+      <div class="citinet-trace-box">
+        <div><span>TRACE</span><strong>{{trace.progress}} / {{trace.max}}</strong></div>
+        <div class="citinet-trace-track"><i style="width:{{trace.percent}}%"></i></div>
+      </div>
+    {{/if}}
+  </header>
+
+  <div class="citinet-workspace">
+    <nav class="citinet-nav">
+      <button type="button" data-nav-view="home" class="{{#if nav.home}}is-active{{/if}}"><i class="fas fa-house"></i><span>Home</span></button>
+      {{#if terminal.enabled.inbox}}<button type="button" data-nav-view="inbox" class="{{#if nav.inbox}}is-active{{/if}}"><i class="fas fa-envelope"></i><span>Inbox</span>{{#if unreadCount}}<b>{{unreadCount}}</b>{{/if}}</button>{{/if}}
+      {{#if terminal.enabled.files}}<button type="button" data-nav-view="files" class="{{#if nav.files}}is-active{{/if}}"><i class="fas fa-folder"></i><span>Files</span></button>{{/if}}
+      {{#if terminal.enabled.citinet}}<button type="button" data-nav-view="citinet" class="{{#if nav.citinet}}is-active{{/if}}"><i class="fas fa-globe"></i><span>CitiNet</span></button>{{/if}}
+      {{#if terminal.enabled.autofixer}}<button type="button" data-nav-view="autofixer" class="{{#if nav.autofixer}}is-active{{/if}}"><i class="fas fa-car"></i><span>Autofixer</span></button>{{/if}}
+      <div class="citinet-nav-spacer"></div>
+      <div class="citinet-operator"><span>OPERATOR</span><strong>{{operatorName}}</strong></div>
+    </nav>
+    <main class="citinet-body">{{{bodyHtml}}}</main>
+  </div>
+
+  <footer class="citinet-statusbar">
+    <span><i class="fas fa-circle"></i> LOCAL NODE</span>
+    <span>{{statusText}}</span>
+    <span class="citinet-calendar {{#unless calendar.ready}}is-offline{{/unless}}" title="Simple Calendar in-world date and time"><i class="fas fa-clock"></i> <span data-calendar-display>{{calendar.display}}</span></span>
+  </footer>
+</div>

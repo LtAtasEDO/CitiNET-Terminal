@@ -1,0 +1,94 @@
+<form class="citinet-editor-form">
+  <header class="citinet-editor-head">
+    <div class="citinet-kicker">TERMINAL PROFILE // {{terminal.id}}</div>
+    <div class="citinet-editor-grid">
+      <label>Name<input type="text" name="name" value="{{terminal.name}}" required></label>
+      <label>Subtitle<input type="text" name="subtitle" value="{{terminal.subtitle}}"></label>
+      <label>Profile
+        <select name="type">
+          {{#each typeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+        </select>
+      </label>
+      <label>Start screen
+        <select name="startView">
+          {{#each startOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+        </select>
+      </label>
+      <label>CitiNet connection
+        <select name="citinetMode">
+          {{#each citinetModeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+        </select>
+        <small>Cached CitiNet pages do not add CitiNet trace. Online is fictional but traceable for every role.</small>
+      </label>
+    </div>
+    <div class="citinet-check-row">
+      <label><input type="checkbox" name="sceneOnly" {{#if terminal.sceneOnly}}checked{{/if}}> Scene-only access</label>
+      <label><input type="checkbox" name="enabled.inbox" {{#if terminal.enabled.inbox}}checked{{/if}}> Inbox</label>
+      <label><input type="checkbox" name="enabled.files" {{#if terminal.enabled.files}}checked{{/if}}> Local Files</label>
+      <label><input type="checkbox" name="enabled.citinet" {{#if terminal.enabled.citinet}}checked{{/if}}> CitiNet</label>
+      <label><input type="checkbox" name="enabled.autofixer" {{#if terminal.enabled.autofixer}}checked{{/if}}> Autofixer</label>
+    </div>
+  </header>
+
+  <section class="citinet-editor-section">
+    <div class="citinet-section-title"><h2>Trace Profile</h2><span>Persistent per player until GM reset. Only Netrunners recognize the trace.</span></div>
+    <div class="citinet-trace-editor">
+      <label><input type="checkbox" name="trace.enabled" {{#if terminal.trace.enabled}}checked{{/if}}> Enable trace</label>
+      <label>Maximum<input type="number" name="trace.max" min="1" max="1000" value="{{terminal.trace.max}}"></label>
+      <label>Base/navigation<input type="number" name="trace.baseCost" min="0" max="1000" value="{{terminal.trace.baseCost}}"></label>
+      <label>Warn at<input type="number" name="trace.warnAt" min="0" max="1000" value="{{terminal.trace.warnAt}}"></label>
+      <label><input type="checkbox" name="trace.lockOnFull" {{#if terminal.trace.lockOnFull}}checked{{/if}}> Lock browser at full trace</label>
+    </div>
+  </section>
+
+  <section class="citinet-editor-section">
+    <div class="citinet-section-title"><h2>Inbox</h2><button type="button" data-action="add-email"><i class="fas fa-plus"></i> Add Email</button></div>
+    <div class="citinet-content-list">
+      {{#each emails}}
+        <article class="citinet-content-row" data-kind="email" data-id="{{id}}">
+          <div><strong>{{subject}}</strong><small>{{from}} → {{to}} · ID {{id}}</small></div>
+          <div class="citinet-badges">{{#if locked}}<span class="is-risk"><i class="fas fa-lock"></i> {{lockName}}</span>{{/if}}{{#if shardExport.enabled}}<span><i class="fas fa-microchip"></i> Shard</span>{{/if}}{{#if traceCost}}<span>+{{traceCost}} trace</span>{{/if}}{{#unless published}}<span class="is-muted">Hidden</span>{{/unless}}</div>
+          <div class="citinet-row-actions"><button type="button" data-action="edit-content"><i class="fas fa-pen"></i></button><button type="button" data-action="content-up"><i class="fas fa-arrow-up"></i></button><button type="button" data-action="content-down"><i class="fas fa-arrow-down"></i></button><button type="button" data-action="delete-content" class="is-danger"><i class="fas fa-trash"></i></button></div>
+        </article>
+      {{else}}<div class="citinet-empty">No emails.</div>{{/each}}
+    </div>
+  </section>
+
+  <section class="citinet-editor-section">
+    <div class="citinet-section-title"><h2>Local Files</h2><button type="button" data-action="add-file"><i class="fas fa-plus"></i> Add File</button></div>
+    <div class="citinet-content-list">
+      {{#each files}}
+        <article class="citinet-content-row" data-kind="file" data-id="{{id}}">
+          <div><strong>{{title}}</strong><small>{{fileType}} · ID {{id}}</small></div>
+          <div class="citinet-badges">{{#if locked}}<span class="is-risk"><i class="fas fa-lock"></i> {{lockName}}</span>{{/if}}{{#if randomized}}<span><i class="fas fa-dice-d20"></i> {{randomTableName}}</span>{{/if}}{{#if shardExport.enabled}}<span><i class="fas fa-microchip"></i> Shard</span>{{/if}}{{#if traceCost}}<span>+{{traceCost}} trace</span>{{/if}}{{#unless published}}<span class="is-muted">Hidden</span>{{/unless}}</div>
+          <div class="citinet-row-actions"><button type="button" data-action="edit-content"><i class="fas fa-pen"></i></button><button type="button" data-action="content-up"><i class="fas fa-arrow-up"></i></button><button type="button" data-action="content-down"><i class="fas fa-arrow-down"></i></button><button type="button" data-action="delete-content" class="is-danger"><i class="fas fa-trash"></i></button></div>
+        </article>
+      {{else}}<div class="citinet-empty">No local files.</div>{{/each}}
+    </div>
+  </section>
+
+  <section class="citinet-editor-section">
+    <div class="citinet-section-title"><h2>Autofixer Vehicle Catalog</h2><span>Drop Cyberpunk RED Vehicle Items below.</span></div>
+    <div class="citinet-vehicle-drop"><i class="fas fa-car-side"></i><strong>Drop Vehicle Items Here</strong><small>World Items and compendium Items are supported.</small></div>
+    <div class="citinet-content-list">
+      {{#each vehicles}}
+        <article class="citinet-content-row citinet-vehicle-row" data-id="{{id}}">
+          <img src="{{img}}">
+          <div><strong>{{name}}</strong><small>{{sourceLabel}} · ID {{id}}</small></div>
+          <label>Sale price <input type="number" min="0" step="1" value="{{price}}" data-vehicle-price></label>
+          <div class="citinet-row-actions"><button type="button" data-action="vehicle-up"><i class="fas fa-arrow-up"></i></button><button type="button" data-action="vehicle-down"><i class="fas fa-arrow-down"></i></button><button type="button" data-action="delete-vehicle" class="is-danger"><i class="fas fa-trash"></i></button></div>
+        </article>
+      {{else}}<div class="citinet-empty">No vehicles loaded.</div>{{/each}}
+    </div>
+  </section>
+
+  <footer class="citinet-editor-footer">
+    <div><strong>Scene:</strong> {{sceneLabel}} · <strong>Selected Tile bindings:</strong> {{bindingCount}}</div>
+    <div>
+      <button type="button" data-action="preview"><i class="fas fa-eye"></i> Preview</button>
+      <button type="button" data-action="bind"><i class="fas fa-link"></i> Bind Selected Tile</button>
+      <button type="submit" class="is-primary"><i class="fas fa-save"></i> Save</button>
+      <button type="button" data-action="close"><i class="fas fa-times"></i> Close</button>
+    </div>
+  </footer>
+</form>
