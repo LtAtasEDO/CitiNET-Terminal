@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.7.6-beta.2 — 2026-08-29
+
+- Fixed a live Foundry hook-order collision that caused a verified full Hexcode success to remain encrypted.
+- Foundry's automatic `closeHBLPlayerApp` event is now ignored without deleting CitiNet's pending breach handshake.
+- CitiNet waits for Hexcode Breach Lite v1.0.5's second, explicit outcome-bearing hook before validating the puzzle, Actor, and solved-sequence totals.
+- Preserved the full-success-only unlock rule: `partial`, `failure`, and `aborted` outcomes still remain encrypted.
+- No terminal-data, Tile-binding, Hexcode-puzzle, or helper-Macro migration is required.
+
+## 0.7.6-beta.1 — 2026-08-29
+
+- Updated the optional Hexcode Breach Lite requirement and runtime integration to the live-validated v1.0.5 outcome contract.
+- Replaced inspection of Hexcode's internal player-app state with the explicit `closeHBLPlayerApp` result metadata.
+- CitiNet now unlocks an email or file only for an exact `success` result where every configured sequence was solved.
+- `partial`, `failure`, and `aborted` results leave CitiNet content encrypted; partial runs display a concise reminder that full success is required.
+- Validates the returned puzzle and Actor identifiers against the pending CitiNet lock before granting access.
+- Ignores native Hexcode GM Preview outcomes. CitiNet's own GM Preview still grants only a session-local preview unlock after full success.
+- Preserved the v0.7.5-beta.2 FilePicker and CPR Vehicle speed-field fixes; no terminal-data, Tile-binding, or helper-Macro migration is required.
+
+## 0.7.5-beta.3 — 2026-08-29
+
+- Verified and preserved the v0.7.5-beta.2 Foundry VTT 12 FilePicker repair for primary images, gallery images, and generic image-picker fields.
+- Verified the Autofixer vehicle display against Cyberpunk RED Vehicle Items and retained `system.speedCombat` and `system.speedNarrative` as the first-choice Combat Move and Narrative Speed fields.
+- Updated the optional Hexcode Breach Lite integration, manifest recommendation, runtime guidance, and documentation from v1.0.0 to the current stable v1.0.4.
+- Confirmed that CitiNet's `listScenePuzzles`, `isNetrunner`, `openPuzzle(id, { actor })`, and successful-close integration remain compatible with Hexcode Breach Lite v1.0.4; no bridge rewrite or database migration is required.
+
+## 0.7.5-beta.2 — 2026-08-25
+
+- Fixed the Terminal Editor image pickers (primary image, gallery images, and the generic `data-picker-target` pickers) not opening on Foundry VTT 12: the pickers now open with `render(true)`.
+- Added the Cyberpunk RED vehicle fields `system.speedCombat` and `system.speedNarrative` as first-choice fallbacks for the Autofixer vehicle Combat Move and Narrative Speed displays, so real CPR Vehicle Items populate those rows instead of showing blank.
+- No database migration is required; existing terminal data is unchanged.
+
 ## 0.7.5-beta.1 — 2026-08-14
 
 - Replaced the mechanical Autofixer receipt text `Vehicle Item delivered` with an in-world delivery message from El Capitán.
