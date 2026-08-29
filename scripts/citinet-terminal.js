@@ -1,5 +1,5 @@
 const CT_ID = "citinet-terminal";
-const CT_VERSION = "0.7.5-beta.1";
+const CT_VERSION = "0.7.6-beta.2";
 const CT_DB_KEY = "db";
 const CT_DB_VERSION = 5;
 const CT_SOCKET = `module.${CT_ID}`;
@@ -8,6 +8,7 @@ const CT_UNLOCK_FLAG = "unlocks";
 const CT_READ_FLAG = "readContent";
 const CT_TRACE_FLAG = "traceStates";
 const CT_HBL_ID = "hexcode-breach-lite";
+const CT_HBL_MIN_VERSION = "1.0.5";
 const CT_SC_ID = "foundryvtt-simple-calendar";
 
 let ctCalendarHookBound = false;
@@ -26,6 +27,28 @@ const ctNum = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(v
 const ctClamp = (value, min, max) => Math.min(max, Math.max(min, ctNum(value, min)));
 const ctSlug = value => String(value || "terminal").trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "terminal";
 const ctLines = value => String(value || "").split(/\r?\n/g).map(line => line.trim()).filter(Boolean);
+
+function ctVersionAtLeast(current, minimum) {
+  const parts = value => String(value || "0")
+    .split(/[+-]/, 1)[0]
+    .split(".")
+    .slice(0, 3)
+    .map(part => Math.max(0, Math.trunc(Number(part) || 0)));
+  const installed = parts(current);
+  const required = parts(minimum);
+  for (let index = 0; index < 3; index += 1) {
+    const installedPart = installed[index] || 0;
+    const requiredPart = required[index] || 0;
+    if (installedPart !== requiredPart) return installedPart > requiredPart;
+  }
+  return true;
+}
+
+function ctHexcodeModule() {
+  const module = game.modules?.get(CT_HBL_ID);
+  if (!module?.active || !ctVersionAtLeast(module.version, CT_HBL_MIN_VERSION)) return null;
+  return module;
+}
 
 function ctSimpleCalendar() {
   const module = game.modules?.get(CT_SC_ID);
@@ -297,7 +320,7 @@ function ctGetActor() {
 
 function ctIsNetrunner(actor) {
   if (!actor) return false;
-  const apiCheck = game.modules.get(CT_HBL_ID)?.api?.isNetrunner;
+  const apiCheck = ctHexcodeModule()?.api?.isNetrunner;
   if (typeof apiCheck === "function") {
     try { return Boolean(apiCheck(actor)); }
     catch (_error) { /* use the matching local check below */ }
@@ -476,8 +499,7 @@ function ctSnapshotRollTable(table) {
 }
 
 async function ctScenePuzzleOptions() {
-  const module = game.modules.get(CT_HBL_ID);
-  const api = module?.active ? module.api : null;
+  const api = ctHexcodeModule()?.api;
   if (!api?.listScenePuzzles) return [];
   try {
     const puzzles = await api.listScenePuzzles();
@@ -524,6 +546,13 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
   const isNetpage = kind === "netpage";
   let randomTable = ctNormalizeRandomTable(item.randomTable || ctEmptyRandomTable());
   const shardExport = ctNormalizeShardExport(item.shardExport);
+  const installedHbl = game.modules.get(CT_HBL_ID);
+  const hblReady = Boolean(ctHexcodeModule());
+  const hblHelp = hblReady
+    ? "Puzzles belong to the active scene. A changed lock invalidates earlier player unlocks. CitiNet unlocks only after a full breach success."
+    : installedHbl?.active
+      ? `Hexcode Breach Lite v${CT_HBL_MIN_VERSION} or newer is required; update Hexcode before assigning or opening locks.`
+      : `Hexcode Breach Lite v${CT_HBL_MIN_VERSION} is not active; existing locks are preserved but cannot be opened.`;
   const title = source?.id ? `Edit ${isEmail ? "Email" : isFile ? "File" : "CitiNet Page"}` : `New ${isEmail ? "Email" : isFile ? "File" : "CitiNet Page"}`;
   if (item.lockPuzzleId && !puzzleOptions.some(puzzle => puzzle.id === item.lockPuzzleId)) {
     puzzleOptions = [...puzzleOptions, { id: item.lockPuzzleId, name: item.lockPuzzleName || "Previously assigned puzzle", sceneId: item.lockSceneId || "" }];
@@ -545,8 +574,8 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
     <label>Card excerpt<input name="excerpt" value="${ctEsc(item.excerpt)}"><div class="citinet-dialog-help">Short preview shown beneath this page title in the CitiNet directory.</div></label>`;
   const lockField = !isNetpage ? `
     <label class="citinet-wide citinet-dialog-lock">Hexcode Breach Lite lock
-      <select name="lockPuzzleId" ${game.modules.get(CT_HBL_ID)?.active ? "" : "disabled"}>${lockOptions}</select>
-      <div class="citinet-dialog-help">${game.modules.get(CT_HBL_ID)?.active ? "Puzzles belong to the active scene. A changed lock invalidates earlier player unlocks." : "Hexcode Breach Lite v1.0.0 is not active; this content will remain unlocked."}</div>
+      <select name="lockPuzzleId" ${hblReady ? "" : "disabled"}>${lockOptions}</select>
+      <div class="citinet-dialog-help">${hblHelp}</div>
     </label>` : "";
   const randomTableField = isFile ? `<section class="citinet-dialog-section citinet-wide">
     <div class="citinet-dialog-section-head"><div><strong>Randomized File Data</strong><span>Optional. Drop a RollTable to append one or more randomized text results when this file opens. Result images also join the gallery.</span></div></div>
@@ -602,7 +631,7 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
           icon: '<i class="fas fa-save"></i>',
           callback: html => {
             const fd = new FormData(ctFormRoot(html));
-            const submittedLockId = game.modules.get(CT_HBL_ID)?.active ? String(fd.get("lockPuzzleId") || "") : item.lockPuzzleId;
+            const submittedLockId = hblReady ? String(fd.get("lockPuzzleId") || "") : item.lockPuzzleId;
             const selectedPuzzle = puzzleOptions.find(puzzle => puzzle.id === submittedLockId);
             const previousLock = item.lockPuzzleId;
             const next = ctNormalizeContent({
@@ -644,7 +673,7 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
         root?.querySelector?.("[data-pick-image]")?.addEventListener("click", event => {
           event.preventDefault();
           const input = root.querySelector("[name='image']");
-          new FilePicker({ type: "image", current: input?.value || "", callback: path => { if (input) input.value = path; } }).browse();
+          new FilePicker({ type: "image", current: input?.value || "", callback: path => { if (input) input.value = path; } }).render(true);
         });
         root?.querySelector?.("[data-add-gallery-image]")?.addEventListener("click", event => {
           event.preventDefault();
@@ -652,7 +681,7 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
             if (!galleryInput) return;
             galleryInput.value = [...ctLines(galleryInput.value), path].join("\n");
             refreshGallery();
-          } }).browse();
+          } }).render(true);
         });
         root?.querySelector?.("[data-clear-gallery]")?.addEventListener("click", event => {
           event.preventDefault();
@@ -903,7 +932,7 @@ class CitiNetTerminalEditorApp extends FormApplication {
       event.preventDefault();
       const name = event.currentTarget.dataset.pickerTarget;
       const input = ctFormRoot(html)?.querySelector(`[name='${name}']`);
-      new FilePicker({ type: "image", current: input?.value || "", callback: path => { if (input) input.value = path; } }).browse();
+      new FilePicker({ type: "image", current: input?.value || "", callback: path => { if (input) input.value = path; } }).render(true);
     });
     const drop = html?.[0]?.querySelector?.(".citinet-vehicle-drop");
     drop?.addEventListener("dragover", event => { event.preventDefault(); drop.classList.add("is-drag"); });
@@ -1182,8 +1211,8 @@ async function ctResolveVehicle(entry) {
     brand: display(ctFirstValue(raw, ["system.brand", "system.manufacturer", "system.make", "system.vehicle.brand"])),
     sdp: display(ctFirstValue(raw, ["system.sdp", "system.sdp.value", "system.derivedStats.sdp", "system.vehicle.sdp"])),
     seats: display(ctFirstValue(raw, ["system.seats", "system.passengers", "system.vehicle.seats", "system.occupancy"])),
-    combatMove: display(ctFirstValue(raw, ["system.combatMove", "system.move", "system.stats.move", "system.vehicle.move"])),
-    narrativeSpeed: display(ctFirstValue(raw, ["system.narrativeSpeed", "system.speed", "system.vehicle.speed", "system.mph"])),
+    combatMove: display(ctFirstValue(raw, ["system.speedCombat", "system.combatMove", "system.move", "system.stats.move", "system.vehicle.move"])),
+    narrativeSpeed: display(ctFirstValue(raw, ["system.speedNarrative", "system.narrativeSpeed", "system.speed", "system.vehicle.speed", "system.mph"])),
     description: String(ctFirstValue(raw, ["system.description.value", "system.description", "system.notes", "system.details.description"]) || "")
   };
 }
@@ -1295,9 +1324,9 @@ function ctShardExportHtml(item, kind, isNetrunner = false) {
 
 function ctLockHtml(item, kind, gmPreview = false, isNetrunner = false) {
   const detail = gmPreview
-    ? `GM Preview is simulating the player lock. Select a Netrunner Token before launching; a successful breach reveals this ${kind} only until this preview closes.`
+    ? `GM Preview is simulating the player lock. Select a Netrunner Token before launching; a full breach success reveals this ${kind} only until this preview closes.`
     : isNetrunner
-      ? `Authorized Netrunner access is required. A successful breach unlocks only this ${kind} for your user.`
+      ? `Authorized Netrunner access is required. A full breach success unlocks only this ${kind} for your user.`
       : `This ${kind} requires an authorized Netrunner. Other Roles may continue using the rest of the terminal.`;
   const action = gmPreview || isNetrunner
     ? `<button type="button" data-action="breach" data-kind="${kind}" data-id="${ctEsc(item.id)}"><i class="fas fa-code"></i> Initiate Hexcode Breach</button>`
@@ -1717,9 +1746,14 @@ async function ctStartBreach(playerApp, kind, itemId) {
   if (playerApp._isContentUnlocked(kind, item)) return playerApp.render(false);
   const scene = ctScene();
   if (item.lockSceneId && scene?.id !== item.lockSceneId) return ui.notifications.warn(`This lock belongs to ${game.scenes.get(item.lockSceneId)?.name || "a different scene"}.`);
-  const module = game.modules.get(CT_HBL_ID);
-  const api = module?.active ? module.api : null;
-  if (!api?.openPuzzle) return ui.notifications.warn("Hexcode Breach Lite v1.0.0 is not active.");
+  const installedHbl = game.modules.get(CT_HBL_ID);
+  const api = ctHexcodeModule()?.api;
+  if (!api?.openPuzzle) {
+    const message = installedHbl?.active
+      ? `CitiNet requires Hexcode Breach Lite v${CT_HBL_MIN_VERSION} or newer for verified breach outcomes.`
+      : `Hexcode Breach Lite v${CT_HBL_MIN_VERSION} is not active.`;
+    return ui.notifications.warn(message);
+  }
   const actor = ctGetActor();
   if (!actor) return ui.notifications.warn("Select the triggering Netrunner's Token or assign a Player Character.");
   if (!ctIsNetrunner(actor)) {
@@ -1730,7 +1764,17 @@ async function ctStartBreach(playerApp, kind, itemId) {
   }
   const breachApp = await api.openPuzzle(item.lockPuzzleId, { actor });
   if (!breachApp) return null;
-  ctPendingBreaches.set(breachApp, { playerApp, terminalId: terminal.id, kind, itemId, puzzleId: item.lockPuzzleId, userId: game.user.id, gmPreview: playerApp.gmPreview });
+  ctPendingBreaches.set(breachApp, {
+    playerApp,
+    terminalId: terminal.id,
+    kind,
+    itemId,
+    puzzleId: item.lockPuzzleId,
+    actorId: String(actor.id || ""),
+    actorUuid: String(actor.uuid || ""),
+    userId: game.user.id,
+    gmPreview: playerApp.gmPreview
+  });
   return breachApp;
 }
 
@@ -1987,12 +2031,53 @@ Hooks.on("getSceneControlButtons", controls => {
   });
 });
 
-Hooks.on("closeHBLPlayerApp", async breachApp => {
+Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
   const pending = ctPendingBreaches.get(breachApp);
   if (!pending || pending.userId !== game.user.id) return;
+
+  // Foundry fires the class-named close hook automatically during
+  // Application#close. Hexcode v1.0.5 then fires the same hook again with the
+  // explicit outcome contract after super.close() completes. Ignore the first
+  // framework event without consuming the pending breach handshake.
+  const outcomes = new Set(["success", "partial", "failure", "aborted"]);
+  const hasOutcomeContract = resultData
+    && typeof resultData === "object"
+    && outcomes.has(resultData.outcome)
+    && Object.hasOwn(resultData, "puzzleId")
+    && Object.hasOwn(resultData, "solvedCount")
+    && Object.hasOwn(resultData, "totalSequences")
+    && Object.hasOwn(resultData, "gmPreview");
+  if (!hasOutcomeContract) return;
+
   ctPendingBreaches.delete(breachApp);
-  const successful = Boolean(breachApp.finished && breachApp.puzzle?.id === pending.puzzleId && breachApp.puzzle?.sequences?.some(sequence => sequence.solved));
-  if (!successful) return;
+  if (resultData.gmPreview) return;
+
+  const samePuzzle = String(resultData.puzzleId || "") === String(pending.puzzleId || "");
+  const sameActor = pending.actorUuid
+    ? String(resultData.actorUuid || "") === pending.actorUuid
+    : pending.actorId
+      ? String(resultData.actorId || "") === pending.actorId
+      : true;
+  if (!samePuzzle || !sameActor) {
+    console.warn(`${CT_ID} | Ignored a Hexcode result that did not match the pending CitiNet lock.`, {
+      expectedPuzzleId: pending.puzzleId,
+      receivedPuzzleId: resultData.puzzleId,
+      expectedActorId: pending.actorId,
+      receivedActorId: resultData.actorId
+    });
+    return ui.notifications.warn("The Hexcode result did not match this CitiNet lock; the content remains encrypted.");
+  }
+
+  const solvedCount = Math.max(0, Math.trunc(ctNum(resultData.solvedCount, 0)));
+  const totalSequences = Math.max(0, Math.trunc(ctNum(resultData.totalSequences, 0)));
+  const fullSuccess = resultData.outcome === "success" && totalSequences > 0 && solvedCount === totalSequences;
+  if (!fullSuccess) {
+    if (resultData.outcome === "partial") {
+      ui.notifications.warn(`Partial breach secured ${solvedCount} of ${totalSequences} sequences, but CitiNet requires a full success. The content remains encrypted.`);
+    }
+    return;
+  }
+
   const db = await ctLoadDB();
   const terminal = db.terminals[pending.terminalId];
   const list = pending.kind === "email" ? terminal?.emails : terminal?.files;
