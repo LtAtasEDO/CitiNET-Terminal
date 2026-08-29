@@ -13,7 +13,7 @@ Module creation assisted by AI.
 - Optional RollTable-backed Local Files with session-stable randomized text and result images.
 - Per-terminal **Cached / Offline** and fictional **Online** CitiNet modes.
 - Terminal date/time display and stored module timestamps use the active Simple Calendar in-world clock. Open terminals refresh when Simple Calendar advances or rewinds; real-world system time is never shown.
-- Individual email/file locks that launch a scene-local Hexcode Breach Lite v1.0.0 puzzle.
+- Individual email/file locks that launch a scene-local Hexcode Breach Lite v1.0.5 puzzle and unlock only after an explicit full-success outcome.
 - Per-user unlocks. One player cracking a file does not unlock it for everyone.
 - Browser-style Home, Back, and Forward navigation.
 - Configurable, persistent per-player trace progress for every role, with Netrunner-only awareness, GM warning/full-trace alerts, and reliable GM reset controls.
@@ -59,7 +59,9 @@ The buyer is the first controlled Token's Actor, falling back to the user's assi
 
 ## Hexcode locks
 
-Hexcode Breach Lite v1.0.0 is optional. With it active, the GM can choose any puzzle from the active scene while editing an email or file. A live player must satisfy Hexcode Breach Lite's Netrunner/Interface-role gate and complete a successful breach. CitiNet's GM Preview now simulates the player lock instead of bypassing it: select a Netrunner Token to launch the assigned puzzle. A successful preview breach reveals the protected content only for that preview window and does not grant a permanent GM-user unlock.
+Hexcode Breach Lite v1.0.5 is optional. With it active, the GM can choose any puzzle from the active scene while editing an email or file. A live player must satisfy Hexcode Breach Lite's Netrunner/Interface-role gate and crack every configured sequence. CitiNet consumes v1.0.5's explicit close outcome and unlocks content only for `success`; `partial`, `failure`, and `aborted` outcomes leave it encrypted. Rewards already secured from individual sequences remain governed by Hexcode Breach Lite.
+
+CitiNet's GM Preview simulates the player lock: select a Netrunner Token to launch the assigned puzzle. A full success reveals the protected content only for that CitiNet preview window and does not grant a permanent user unlock. Native Hexcode GM Preview outcomes are ignored by CitiNet companion-module unlock logic.
 
 Puzzles are scene-local. Open the terminal editor on the same scene that owns the intended puzzle before assigning the lock.
 
