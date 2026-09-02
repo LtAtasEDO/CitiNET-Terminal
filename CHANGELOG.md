@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.6-beta.3 — 2026-09-01
+- Added explicit attribution and licensing acknowledgement for the updated `citinet-terminal.svg` asset as it uses the human-authored **[Square Terminal](https://lucide.dev/icons/square-terminal)** geometry from Lucide Icons v1.8.0.
+- Added `THIRD_PARTY_NOTICES.md` and a matching README section.
+- No interface or other behaviors changed.
+
 ## 0.7.6-beta.2 — 2026-08-29
 
 - Fixed a live Foundry hook-order collision that caused a verified full Hexcode success to remain encrypted.
