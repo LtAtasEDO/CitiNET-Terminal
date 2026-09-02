@@ -1,7 +1,36 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="CitiNet terminal">
-  <rect width="512" height="512" rx="56" fill="#080d12"/>
-  <rect x="58" y="76" width="396" height="278" rx="24" fill="#101c24" stroke="#ffd447" stroke-width="22"/>
-  <path d="M98 130h316M98 176h198" fill="none" stroke="#23dbe0" stroke-width="20" stroke-linecap="round"/>
-  <path d="m118 242 42 36-42 36M196 314h92" fill="none" stroke="#ffd447" stroke-width="20" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M206 354v52h100v-52M160 424h192" fill="none" stroke="#23dbe0" stroke-width="22" stroke-linecap="round"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" role="img" aria-labelledby="citinet-icon-title citinet-icon-desc">
+  <title id="citinet-icon-title">CitiNet Terminal</title>
+  <desc id="citinet-icon-desc">A neon command-line terminal in CitiNet cyan and yellow.</desc>
+  <metadata>
+    Square Terminal geometry from Lucide Icons v1.8.0.
+    Copyright (c) 2026 Lucide Icons and Contributors. ISC License.
+    Original icon contribution: @mittalyashu, Lucide pull request 181 (2021).
+    CitiNet color treatment and presentation prepared for CitiNet Terminal.
+  </metadata>
+  <style>
+    .citinet-bg {
+      fill: #080d12;
+    }
+    .citinet-screen {
+      fill: #101c24;
+      stroke: #23dbe0;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+    .citinet-prompt {
+      fill: none;
+      stroke: #ffd447;
+      stroke-width: 2;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+  </style>
+
+  <rect class="citinet-bg" width="24" height="24" rx="3"/>
+
+  <!-- Lucide Square Terminal geometry; presentation-only modifications. -->
+  <rect class="citinet-screen" width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+  <path class="citinet-prompt" d="m7 11 2-2-2-2"/>
+  <path class="citinet-prompt" d="M11 13h4"/>
 </svg>
