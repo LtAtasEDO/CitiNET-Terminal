@@ -3,7 +3,7 @@
   "title": "CitiNet Terminal™",
   "description": "Offline or roleplay-online computer terminals for Cyberpunk RED with GM-authored inboxes, focused CitiNet information pages, randomized local files, Memory Chip-validated Shard exports, Autofixer-style vehicle purchases, Netrunner-aware trace states, and optional Hexcode Breach Lite locks.",
   "url": "https://github.com/LtAtasEDO/CitiNET-Terminal",
-  "version": "0.7.6-beta.2",
+  "version": "0.7.6-beta.3",
   "authors": [
     {
       "name": "Lt Atlas"
@@ -57,5 +57,5 @@
   "socket": true,
   "readme": "README.md",
   "manifest": "https://github.com/LtAtasEDO/CitiNET-Terminal/releases/latest/download/module.json",
-  "download": "https://github.com/LtAtasEDO/CitiNET-Terminal/releases/download/0.7.6-beta.2/module.zip"
+  "download": "https://github.com/LtAtasEDO/CitiNET-Terminal/releases/download/0.7.6-beta.3/module.zip"
 }
