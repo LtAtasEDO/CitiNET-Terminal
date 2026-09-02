@@ -93,3 +93,8 @@ game.citinetTerminal.bindSelectedTiles(terminalId)
 game.citinetTerminal.createHelperMacro()
 game.citinetTerminal.loadDB()
 ```
+## Artwork and icon acknowledgements
+
+The `citinet-terminal.svg` asset uses the human-authored **Square Terminal** geometry from Lucide Icons v1.8.0 via ISC License. The icon was originally contributed by GitHub user `@mittalyashu` through Lucide pull request #181 and was modified with CitiNet color treatment via CSS to give a dark background, with accessibility metadata, and presentation styling. The original Lucide geometry is unchanged.
+
+See `THIRD_PARTY_NOTICES.md` for the complete acknowledgement.
