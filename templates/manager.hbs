@@ -7,6 +7,7 @@
     </div>
     <div class="citinet-manager-actions">
       <button type="button" data-action="new-computer"><i class="fas fa-desktop"></i> New Computer</button>
+      <button type="button" data-action="new-portable"><i class="fas fa-laptop"></i> New Portable / Laptop</button>
       <button type="button" data-action="new-autofixer"><i class="fas fa-car"></i> New Autofixer</button>
       <button type="button" data-action="new-netpage"><i class="fas fa-globe"></i> New Netpage</button>
     </div>
@@ -25,7 +26,7 @@
               <div class="citinet-manager-icon"><i class="fas {{icon}}"></i></div>
               <div>
                 <h3>{{name}}</h3>
-                <p>{{typeLabel}} · {{sceneLabel}} · {{bindingLabel}}</p>
+                <p>{{typeLabel}} · {{scopeLabel}} · {{sceneLabel}} · {{bindingLabel}}</p>
                 <div class="citinet-badges">
                   {{#if enabled.inbox}}<span>Inbox {{emailCount}}</span>{{/if}}
                   {{#if enabled.files}}<span>Files {{fileCount}}</span>{{/if}}
@@ -39,6 +40,7 @@
               <button type="button" data-action="preview" title="Preview"><i class="fas fa-eye"></i></button>
               <button type="button" data-action="edit" title="Edit"><i class="fas fa-pen"></i></button>
               <button type="button" data-action="bind" title="Bind selected Tile"><i class="fas fa-link"></i></button>
+              <button type="button" data-action="unbind" title="Unbind selected Tile"><i class="fas fa-unlink"></i></button>
               <button type="button" data-action="reset-trace" title="Reset all player trace records"><i class="fas fa-crosshairs"></i></button>
               <button type="button" class="is-danger" data-action="delete" title="Delete"><i class="fas fa-trash"></i></button>
             </div>
