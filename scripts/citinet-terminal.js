@@ -1,5 +1,5 @@
 const CT_ID = "citinet-terminal";
-const CT_VERSION = "1.0.0";
+const CT_VERSION = "1.0.1";
 const CT_DB_KEY = "db";
 const CT_DB_VERSION = 6;
 const CT_SOCKET = `module.${CT_ID}`;
