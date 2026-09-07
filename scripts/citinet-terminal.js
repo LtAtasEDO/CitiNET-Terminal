@@ -1,14 +1,14 @@
 const CT_ID = "citinet-terminal";
-const CT_VERSION = "0.7.6-beta.2";
+const CT_VERSION = "1.0.0";
 const CT_DB_KEY = "db";
-const CT_DB_VERSION = 5;
+const CT_DB_VERSION = 6;
 const CT_SOCKET = `module.${CT_ID}`;
 const CT_BINDING_FLAG = "binding";
 const CT_UNLOCK_FLAG = "unlocks";
 const CT_READ_FLAG = "readContent";
 const CT_TRACE_FLAG = "traceStates";
 const CT_HBL_ID = "hexcode-breach-lite";
-const CT_HBL_MIN_VERSION = "1.0.5";
+const CT_HBL_MIN_VERSION = "1.2.0";
 const CT_SC_ID = "foundryvtt-simple-calendar";
 
 let ctCalendarHookBound = false;
@@ -125,12 +125,19 @@ function ctDefaultShardExport() {
 }
 
 function ctEmptyRandomTable() {
-  return { uuid: "", name: "", formula: "1d20", drawCount: 1, results: [] };
+  return { uuid: "", name: "", formula: "1d20", drawCount: 1, results: [], sharedDraw: null };
 }
 
-function ctNewTerminal(type = "computer", name = "New Terminal") {
+function ctStorageScope(value, legacySceneOnly = true) {
+  if (value === "world") return "world";
+  if (value === "scene") return "scene";
+  return legacySceneOnly === false ? "world" : "scene";
+}
+
+function ctNewTerminal(type = "computer", name = "New Terminal", storageScope = "scene") {
   const vehicle = type === "autofixer";
   const scene = ctScene();
+  const scope = ctStorageScope(storageScope);
   return {
     id: ctId(),
     name: String(name || (vehicle ? "Autofixer Terminal" : "New Terminal")),
@@ -138,8 +145,9 @@ function ctNewTerminal(type = "computer", name = "New Terminal") {
     type: vehicle ? "autofixer" : "computer",
     startView: vehicle ? "autofixer" : "home",
     citinetMode: "cached",
-    sceneOnly: true,
-    sceneId: scene?.id || "",
+    storageScope: scope,
+    sceneOnly: scope === "scene",
+    sceneId: scope === "scene" ? (scene?.id || "") : "",
     tileUuid: "",
     enabled: { inbox: !vehicle, files: !vehicle, citinet: !vehicle, autofixer: vehicle },
     trace: ctDefaultTrace(),
@@ -168,7 +176,7 @@ function ctNormalizeShardExport(value) {
 
 function ctNormalizeRandomTable(value) {
   const raw = value && typeof value === "object" ? value : {};
-  return {
+  const normalized = {
     uuid: String(raw.uuid || ""),
     name: String(raw.name || ""),
     formula: String(raw.formula || "1d20"),
@@ -180,6 +188,38 @@ function ctNormalizeRandomTable(value) {
       weight: Math.max(1, Math.trunc(ctNum(result?.weight, 1)))
     })) : []
   };
+  const sourceKey = ctRandomTableSourceKey(normalized);
+  const shared = raw.sharedDraw && typeof raw.sharedDraw === "object" ? raw.sharedDraw : null;
+  normalized.sharedDraw = shared && shared.sourceKey === sourceKey && Array.isArray(shared.results)
+    ? {
+        sourceKey,
+        results: shared.results.map(result => ({ text: String(result?.text || ""), img: String(result?.img || "") })).filter(result => result.text || result.img),
+        drawnAt: ctNum(shared.drawnAt, 0),
+        drawnByUserId: String(shared.drawnByUserId || ""),
+        drawnByName: String(shared.drawnByName || "")
+      }
+    : null;
+  return normalized;
+}
+
+function ctRandomTableSourceKey(table) {
+  const source = JSON.stringify({
+    uuid: String(table?.uuid || ""),
+    formula: String(table?.formula || "1d20"),
+    drawCount: ctClamp(Math.trunc(ctNum(table?.drawCount, 1)), 1, 20),
+    results: Array.isArray(table?.results) ? table.results.map(result => ({
+      text: String(result?.text || ""),
+      img: String(result?.img || result?.icon || ""),
+      range: Array.isArray(result?.range) ? result.range.slice(0, 2).map(number => Math.trunc(ctNum(number, 0))) : [],
+      weight: Math.max(1, Math.trunc(ctNum(result?.weight, 1)))
+    })) : []
+  });
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) {
+    hash ^= source.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `rt-${(hash >>> 0).toString(36)}`;
 }
 
 function ctNormalizeContent(raw = {}, kind = "file") {
@@ -193,6 +233,7 @@ function ctNormalizeContent(raw = {}, kind = "file") {
     published: raw.published !== false,
     lockPuzzleId: String(raw.lockPuzzleId || ""),
     lockPuzzleName: String(raw.lockPuzzleName || ""),
+    lockPuzzleScope: raw.lockPuzzleScope === "world" ? "world" : "scene",
     lockSceneId: String(raw.lockSceneId || ""),
     lockRevision: Math.max(1, Math.trunc(ctNum(raw.lockRevision, 1))),
     createdAt: ctNum(raw.createdAt, ctNow()),
@@ -214,6 +255,7 @@ function ctNormalizeContent(raw = {}, kind = "file") {
     body: String(raw.body || ""),
     lockPuzzleId: "",
     lockPuzzleName: "",
+    lockPuzzleScope: "scene",
     lockSceneId: ""
   };
   return {
@@ -239,7 +281,8 @@ function ctNormalizeVehicle(raw = {}) {
 }
 
 function ctNormalizeTerminal(raw = {}) {
-  const base = ctNewTerminal(raw.type, raw.name);
+  const storageScope = ctStorageScope(raw.storageScope, raw.sceneOnly);
+  const base = ctNewTerminal(raw.type, raw.name, storageScope);
   const terminal = foundry.utils.mergeObject(base, raw, { inplace: false, insertKeys: true, overwrite: true });
   delete terminal.headerImage;
   terminal.id = String(raw.id || base.id);
@@ -248,9 +291,10 @@ function ctNormalizeTerminal(raw = {}) {
   terminal.type = raw.type === "autofixer" ? "autofixer" : "computer";
   terminal.startView = ["home", "inbox", "files", "citinet", "autofixer"].includes(raw.startView) ? raw.startView : base.startView;
   terminal.citinetMode = raw.citinetMode === "online" ? "online" : "cached";
-  terminal.sceneId = String(raw.sceneId || "");
+  terminal.storageScope = storageScope;
+  terminal.sceneId = storageScope === "scene" ? String(raw.sceneId || base.sceneId || "") : "";
   terminal.tileUuid = String(raw.tileUuid || "");
-  terminal.sceneOnly = raw.sceneOnly !== false;
+  terminal.sceneOnly = storageScope === "scene";
   terminal.enabled = {
     inbox: raw.enabled?.inbox !== false && terminal.type !== "autofixer",
     files: raw.enabled?.files !== false && terminal.type !== "autofixer",
@@ -306,11 +350,13 @@ async function ctLoadDB() {
   return ctNormalizeDB(game.settings.get(CT_ID, CT_DB_KEY));
 }
 
-async function ctSaveDB(db, { terminalId = null } = {}) {
+async function ctSaveDB(db, { terminalId = null, refresh = true } = {}) {
   if (!game.user.isGM) throw new Error("Only a GM may update CitiNet Terminal data.");
   const saved = await game.settings.set(CT_ID, CT_DB_KEY, ctNormalizeDB(db));
-  ctRefreshOpenWindows(terminalId, { skipEditor: true });
-  game.socket.emit(CT_SOCKET, { op: "refresh", terminalId });
+  if (refresh) {
+    ctRefreshOpenWindows(terminalId, { skipEditor: true });
+    game.socket.emit(CT_SOCKET, { op: "refresh", terminalId });
+  }
   return saved;
 }
 
@@ -418,12 +464,70 @@ function ctSelectedTiles() {
   return (canvas?.tiles?.controlled || []).map(tile => tile.document || tile).filter(tile => tile?.documentName === "Tile");
 }
 
-function ctBindingCount(terminalId) {
-  let count = 0;
+function ctBindingScope(binding, terminal = null) {
+  if (binding?.scope === "world") return "world";
+  if (binding?.scope === "scene") return "scene";
+  return ctStorageScope(terminal?.storageScope, terminal?.sceneOnly);
+}
+
+function ctBoundTiles(terminalId) {
+  const matches = [];
   for (const scene of game.scenes || []) {
-    count += scene.tiles?.filter(tile => tile.getFlag(CT_ID, CT_BINDING_FLAG)?.terminalId === terminalId).length || 0;
+    for (const tile of scene.tiles || []) {
+      if (tile.getFlag(CT_ID, CT_BINDING_FLAG)?.terminalId === terminalId) matches.push({ scene, tile });
+    }
   }
-  return count;
+  return matches;
+}
+
+function ctBindingCount(terminalId) {
+  return ctBoundTiles(terminalId).length;
+}
+
+async function ctMigrateTerminalBindings(terminal, fromScope, toScope, targetSceneId = null) {
+  if (!game.user.isGM || fromScope === toScope) return { updated: 0, removed: 0 };
+  let updated = 0;
+  let removed = 0;
+  for (const { scene, tile } of ctBoundTiles(terminal.id)) {
+    const binding = tile.getFlag(CT_ID, CT_BINDING_FLAG) || {};
+    if (toScope === "world") {
+      await tile.setFlag(CT_ID, CT_BINDING_FLAG, {
+        ...binding,
+        terminalId: terminal.id,
+        terminalName: terminal.name,
+        scope: "world",
+        sceneId: null,
+        version: 2
+      });
+      updated += 1;
+      continue;
+    }
+    if (scene.id !== targetSceneId) {
+      await tile.unsetFlag(CT_ID, CT_BINDING_FLAG);
+      removed += 1;
+      continue;
+    }
+    await tile.setFlag(CT_ID, CT_BINDING_FLAG, {
+      ...binding,
+      terminalId: terminal.id,
+      terminalName: terminal.name,
+      scope: "scene",
+      sceneId: targetSceneId,
+      version: 2
+    });
+    updated += 1;
+  }
+  return { updated, removed };
+}
+
+async function ctRemoveBindingsOutsideScene(terminalId, sceneId) {
+  let removed = 0;
+  for (const entry of ctBoundTiles(terminalId)) {
+    if (entry.scene.id === sceneId) continue;
+    await entry.tile.unsetFlag(CT_ID, CT_BINDING_FLAG);
+    removed += 1;
+  }
+  return removed;
 }
 
 async function ctBindSelectedTiles(terminalId) {
@@ -434,13 +538,28 @@ async function ctBindSelectedTiles(terminalId) {
   const scene = ctScene();
   const tiles = ctSelectedTiles();
   if (!scene || !tiles.length) return ui.notifications.warn("Select one or more Tiles with Foundry's Tile Controls first.");
-  const binding = { terminalId, terminalName: terminal.name, sceneId: scene.id, boundAt: ctNow(), version: 1 };
+  const scope = ctStorageScope(terminal.storageScope, terminal.sceneOnly);
+  if (scope === "scene" && terminal.sceneId && terminal.sceneId !== scene.id) {
+    const oldScene = game.scenes.get(terminal.sceneId)?.name || "its previous Scene";
+    const approved = await ctConfirm("Move Scene-local Terminal?", `<p><b>${ctEsc(terminal.name)}</b> currently belongs to <b>${ctEsc(oldScene)}</b>.</p><p>Move it to <b>${ctEsc(scene.name)}</b> and remove its off-scene Tile bindings?</p>`, "Move & Bind");
+    if (!approved) return 0;
+    await ctRemoveBindingsOutsideScene(terminal.id, scene.id);
+  }
+  const binding = {
+    terminalId,
+    terminalName: terminal.name,
+    scope,
+    sceneId: scope === "scene" ? scene.id : null,
+    boundAt: ctNow(),
+    version: 2
+  };
   await Promise.all(tiles.map(tile => tile.setFlag(CT_ID, CT_BINDING_FLAG, binding)));
-  terminal.sceneId = scene.id;
+  terminal.sceneId = scope === "scene" ? scene.id : "";
   terminal.tileUuid = tiles[0].uuid || terminal.tileUuid;
   terminal.updatedAt = ctNow();
   await ctSaveDB(db, { terminalId });
-  ui.notifications.info(`Bound ${tiles.length} Tile${tiles.length === 1 ? "" : "s"} to ${terminal.name}.`);
+  const portable = scope === "world" ? " as a Portable (World) terminal" : "";
+  ui.notifications.info(`Bound ${tiles.length} Tile${tiles.length === 1 ? "" : "s"} to ${terminal.name}${portable}.`);
   return tiles.length;
 }
 
@@ -453,6 +572,24 @@ async function ctUnbindTerminal(terminalId) {
     }
   }
   await Promise.all(targets.map(tile => tile.unsetFlag(CT_ID, CT_BINDING_FLAG)));
+  return targets.length;
+}
+
+async function ctUnbindSelectedTiles(terminalId) {
+  if (!game.user.isGM) return ui.notifications.warn("Only the GM can unbind CitiNet Terminal Tiles.");
+  const db = await ctLoadDB();
+  const terminal = db.terminals[terminalId];
+  if (!terminal) return ui.notifications.warn(`Terminal not found: ${terminalId}`);
+  const selected = ctSelectedTiles();
+  if (!selected.length) return ui.notifications.warn("Select one or more Tiles with Foundry's Tile Controls first.");
+  const targets = selected.filter(tile => tile.getFlag(CT_ID, CT_BINDING_FLAG)?.terminalId === terminalId);
+  if (!targets.length) return ui.notifications.warn(`None of the selected Tiles are bound to ${terminal.name}.`);
+  await Promise.all(targets.map(tile => tile.unsetFlag(CT_ID, CT_BINDING_FLAG)));
+  const remaining = ctBoundTiles(terminalId);
+  terminal.tileUuid = remaining[0]?.tile?.uuid || "";
+  terminal.updatedAt = ctNow();
+  await ctSaveDB(db, { terminalId });
+  ui.notifications.info(`Unbound ${targets.length} Tile${targets.length === 1 ? "" : "s"} from ${terminal.name}.`);
   return targets.length;
 }
 
@@ -498,12 +635,30 @@ function ctSnapshotRollTable(table) {
   });
 }
 
-async function ctScenePuzzleOptions() {
+async function ctHexcodePuzzleOptions() {
   const api = ctHexcodeModule()?.api;
-  if (!api?.listScenePuzzles) return [];
+  if (!api?.listScenePuzzles || !api?.listWorldPuzzles) return [];
   try {
-    const puzzles = await api.listScenePuzzles();
-    return Object.values(puzzles || {}).map(puzzle => ({ id: puzzle.id, name: puzzle.name, sceneId: ctScene()?.id || "" }));
+    const [scenePuzzles, worldPuzzles] = await Promise.all([api.listScenePuzzles(), api.listWorldPuzzles()]);
+    const sceneId = ctScene()?.id || "";
+    return [
+      ...Object.values(scenePuzzles || {}).map(puzzle => ({
+        id: String(puzzle.id),
+        name: String(puzzle.name || "Unnamed Breach"),
+        scope: "scene",
+        scopeLabel: "Scene",
+        sceneId,
+        selectionKey: `scene::${puzzle.id}`
+      })),
+      ...Object.values(worldPuzzles || {}).map(puzzle => ({
+        id: String(puzzle.id),
+        name: String(puzzle.name || "Unnamed Breach"),
+        scope: "world",
+        scopeLabel: "Portable",
+        sceneId: "",
+        selectionKey: `world::${puzzle.id}`
+      }))
+    ];
   } catch (error) {
     console.warn(`${CT_ID} | Could not list Hexcode Breach puzzles`, error);
     return [];
@@ -514,6 +669,147 @@ function ctDialogClass(app, html, extraClass = "") {
   const element = html?.[0]?.closest?.(".app") || app?.element?.[0];
   element?.classList?.add("citinet-dialog-host");
   if (extraClass) element?.classList?.add(extraClass);
+}
+
+function ctRichTextEditorClass() {
+  // Foundry v12 exposes several legacy client classes through the global
+  // lexical environment without also attaching them to window/globalThis.
+  if (typeof ProseMirrorEditor !== "undefined") return ProseMirrorEditor;
+  return globalThis.foundry?.applications?.ux?.ProseMirrorEditor
+    || globalThis.foundry?.applications?.elements?.ProseMirrorEditor
+    || null;
+}
+
+function ctSyncRichTextValue(form) {
+  const host = form?.querySelector?.("[data-rich-editor]");
+  if (!host) return "";
+  const source = host.querySelector("[data-rich-source]");
+  const visualFrame = host.querySelector("[data-rich-frame]");
+  const visual = host.querySelector("[data-rich-visual]");
+  const editorDom = visual?.matches?.(".ProseMirror")
+    ? visual
+    : visual?.querySelector?.(".ProseMirror") || visualFrame?.querySelector?.(".ProseMirror");
+  const sourceMode = !source?.hidden;
+  const value = sourceMode
+    ? String(source?.value || "")
+    : String(editorDom?.innerHTML ?? source?.value ?? "");
+  if (source) source.value = value;
+  return value;
+}
+
+async function ctActivateRichTextEditor(form) {
+  const host = form?.querySelector?.("[data-rich-editor]");
+  if (!host) return null;
+  const visualFrame = host.querySelector("[data-rich-frame]");
+  let visual = host.querySelector("[data-rich-visual]");
+  const source = host.querySelector("[data-rich-source]");
+  const visualButton = host.querySelector("[data-rich-mode='visual']");
+  const sourceButton = host.querySelector("[data-rich-mode='source']");
+  const fallback = host.querySelector("[data-rich-fallback]");
+  const EditorClass = ctRichTextEditorClass();
+  const state = { mode: "visual", editor: null, mounting: null };
+
+  const blockExternalEditorLink = event => {
+    const anchor = event.target?.closest?.("a");
+    if (!anchor) return;
+    const foundryDocument = anchor.classList.contains("content-link") && (anchor.hasAttribute("data-uuid") || anchor.hasAttribute("data-id"));
+    const foundryRoll = anchor.classList.contains("inline-roll") && (anchor.hasAttribute("data-formula") || anchor.hasAttribute("data-roll"));
+    if (foundryDocument || foundryRoll) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  };
+  const linkSurface = visualFrame || visual;
+  linkSurface?.addEventListener("click", blockExternalEditorLink, true);
+  linkSurface?.addEventListener("auxclick", blockExternalEditorLink, true);
+  linkSurface?.addEventListener("keydown", event => {
+    if (event.key !== "Enter" || !event.target?.closest?.(".ProseMirror")) return;
+    // ProseMirror has already handled Enter by the time this bubble listener runs.
+    // Keep the event from reaching Foundry's Dialog default-button handler without
+    // preventing ProseMirror from inserting the requested paragraph or line break.
+    event.stopPropagation();
+  });
+
+  const editorDom = () => state.editor?.view?.dom || (visual?.matches?.(".ProseMirror") ? visual : visual?.querySelector?.(".ProseMirror")) || null;
+  const getValue = () => state.mode === "source" ? String(source?.value || "") : String(editorDom()?.innerHTML ?? source?.value ?? "");
+  const showMode = mode => {
+    state.mode = mode;
+    if (visualFrame) visualFrame.hidden = mode !== "visual";
+    else if (visual) visual.hidden = mode !== "visual";
+    if (source) source.hidden = mode !== "source";
+    visualButton?.classList.toggle("is-active", mode === "visual");
+    sourceButton?.classList.toggle("is-active", mode === "source");
+    visualButton?.setAttribute("aria-pressed", String(mode === "visual"));
+    sourceButton?.setAttribute("aria-pressed", String(mode === "source"));
+  };
+  const mount = async content => {
+    if (!EditorClass?.create || !visual) throw new Error("Foundry ProseMirrorEditor is unavailable.");
+    state.editor?.destroy?.();
+    state.editor = null;
+    if (visualFrame) {
+      const ownerDocument = visualFrame.ownerDocument || globalThis.document;
+      const freshTarget = ownerDocument?.createElement?.("div");
+      if (!freshTarget) throw new Error("The Foundry visual-editor target could not be rebuilt.");
+      freshTarget.className = "editor-content";
+      freshTarget.dataset.richVisual = "";
+      visualFrame.replaceChildren(freshTarget);
+      visual = freshTarget;
+    } else visual.replaceChildren();
+    try {
+      state.mounting = EditorClass.create(visual, String(content || ""), { collaborate: false, relativeLinks: false });
+      state.editor = await state.mounting;
+    } finally {
+      state.mounting = null;
+    }
+    return state.editor;
+  };
+
+  visualButton?.addEventListener("click", async event => {
+    event.preventDefault();
+    if (state.mode === "visual") return;
+    try {
+      visualButton.disabled = true;
+      if (visualFrame) visualFrame.hidden = false;
+      await mount(source?.value || "");
+      showMode("visual");
+    } catch (error) {
+      console.warn(`${CT_ID} | Visual editor could not be activated.`, error);
+      if (fallback) fallback.hidden = false;
+      showMode("source");
+    } finally {
+      visualButton.disabled = false;
+    }
+  });
+  sourceButton?.addEventListener("click", event => {
+    event.preventDefault();
+    if (state.mode !== "source" && source) source.value = getValue();
+    showMode("source");
+    source?.focus?.();
+  });
+
+  try {
+    await mount(source?.value || "");
+    showMode("visual");
+  } catch (error) {
+    console.warn(`${CT_ID} | Falling back to HTML source editor.`, error);
+    if (visualButton && !EditorClass?.create) {
+      visualButton.disabled = true;
+      visualButton.title = "The Foundry visual editor is unavailable; HTML Source remains fully usable.";
+    }
+    if (fallback) fallback.hidden = false;
+    showMode("source");
+  }
+
+  return {
+    getValue() {
+      const value = getValue();
+      if (source) source.value = value;
+      return value;
+    },
+    destroy() {
+      state.editor?.destroy?.();
+      state.editor = null;
+    }
+  };
 }
 
 function ctPromptName(title, fallback) {
@@ -549,17 +845,25 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
   const installedHbl = game.modules.get(CT_HBL_ID);
   const hblReady = Boolean(ctHexcodeModule());
   const hblHelp = hblReady
-    ? "Puzzles belong to the active scene. A changed lock invalidates earlier player unlocks. CitiNet unlocks only after a full breach success."
+    ? "Choose a Scene-local or Portable (World) puzzle. A changed lock invalidates earlier player unlocks. CitiNet unlocks only after a full breach success."
     : installedHbl?.active
       ? `Hexcode Breach Lite v${CT_HBL_MIN_VERSION} or newer is required; update Hexcode before assigning or opening locks.`
       : `Hexcode Breach Lite v${CT_HBL_MIN_VERSION} is not active; existing locks are preserved but cannot be opened.`;
   const title = source?.id ? `Edit ${isEmail ? "Email" : isFile ? "File" : "CitiNet Page"}` : `New ${isEmail ? "Email" : isFile ? "File" : "CitiNet Page"}`;
-  if (item.lockPuzzleId && !puzzleOptions.some(puzzle => puzzle.id === item.lockPuzzleId)) {
-    puzzleOptions = [...puzzleOptions, { id: item.lockPuzzleId, name: item.lockPuzzleName || "Previously assigned puzzle", sceneId: item.lockSceneId || "" }];
+  const currentLockKey = item.lockPuzzleId ? `${item.lockPuzzleScope || "scene"}::${item.lockPuzzleId}` : "";
+  if (item.lockPuzzleId && !puzzleOptions.some(puzzle => puzzle.selectionKey === currentLockKey)) {
+    puzzleOptions = [...puzzleOptions, {
+      id: item.lockPuzzleId,
+      name: item.lockPuzzleName || "Previously assigned puzzle",
+      scope: item.lockPuzzleScope || "scene",
+      scopeLabel: item.lockPuzzleScope === "world" ? "Portable" : "Scene",
+      sceneId: item.lockSceneId || "",
+      selectionKey: currentLockKey
+    }];
   }
   const lockOptions = [
     `<option value="">No Hexcode lock</option>`,
-    ...puzzleOptions.map(puzzle => `<option value="${ctEsc(puzzle.id)}" ${item.lockPuzzleId === puzzle.id ? "selected" : ""}>${ctEsc(puzzle.name)} (${ctEsc(puzzle.id)})</option>`)
+    ...puzzleOptions.map(puzzle => `<option value="${ctEsc(puzzle.selectionKey)}" ${currentLockKey === puzzle.selectionKey ? "selected" : ""}>[${ctEsc(puzzle.scopeLabel)}] ${ctEsc(puzzle.name)} (${ctEsc(puzzle.id)})</option>`)
   ].join("");
   const primaryFields = isEmail ? `
     <label class="citinet-wide">Subject<input name="subject" value="${ctEsc(item.subject)}" required></label>
@@ -578,13 +882,20 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
       <div class="citinet-dialog-help">${hblHelp}</div>
     </label>` : "";
   const randomTableField = isFile ? `<section class="citinet-dialog-section citinet-wide">
-    <div class="citinet-dialog-section-head"><div><strong>Randomized File Data</strong><span>Optional. Drop a RollTable to append one or more randomized text results when this file opens. Result images also join the gallery.</span></div></div>
+    <div class="citinet-dialog-section-head"><div><strong>Shared Randomized File Data</strong><span>Optional. The first live player open rolls once and locks that reveal for everyone. It remains shared across players, terminal windows, Scenes, and restarts until the GM clears or rerolls it.</span></div></div>
     <div class="citinet-rolltable-drop ${randomTable.uuid ? "has-table" : ""}" data-rolltable-drop>
       <i class="fas fa-dice-d20"></i><div><strong data-rolltable-name>${ctEsc(randomTable.name || "Drop RollTable Here")}</strong><small data-rolltable-status>${randomTable.uuid ? `${randomTable.results.length} snapshotted results // ${randomTable.formula}` : "World and compendium RollTables are supported."}</small></div>
       <button type="button" data-remove-rolltable ${randomTable.uuid ? "" : "hidden"}><i class="fas fa-trash"></i> Remove</button>
     </div>
-    <label>Results drawn per open<input type="number" name="randomTableDrawCount" min="1" max="20" value="${randomTable.drawCount}"></label>
-    <div class="citinet-dialog-help">A draw stays fixed while the terminal window remains open. Reopening the terminal creates a fresh draw.</div>
+    <div class="citinet-random-controls">
+      <label>Results in shared reveal<input type="number" name="randomTableDrawCount" min="1" max="20" value="${randomTable.drawCount}"></label>
+      <div class="citinet-random-state"><strong data-shared-roll-state>${randomTable.sharedDraw ? `LOCKED // ${randomTable.sharedDraw.results.length} shared result${randomTable.sharedDraw.results.length === 1 ? "" : "s"}` : "UNREVEALED // first live open will roll"}</strong><span>Changing the table or draw count automatically clears an incompatible saved reveal.</span></div>
+      <div class="citinet-random-buttons">
+        <button type="button" data-reroll-shared ${randomTable.uuid ? "" : "disabled"}><i class="fas fa-rotate"></i> Roll New Shared Result</button>
+        <button type="button" data-clear-shared ${randomTable.sharedDraw ? "" : "disabled"}><i class="fas fa-unlock"></i> Clear Reveal</button>
+      </div>
+    </div>
+    <div class="citinet-dialog-help">Reroll/Clear changes take effect when you press Save. GM Preview uses a temporary draw and never locks the live result.</div>
   </section>` : "";
   const shardExportField = `<section class="citinet-dialog-section citinet-wide citinet-shard-editor">
     <div class="citinet-dialog-section-head"><div><strong>Export to Shard (Memory Chip)</strong><span>Optional player action. Every Actor needs a carried/equipped Memory Chip or installed Memory Chip cyberware. Netrunners bypass only the configured DV; everyone else rolls manually and the required skill and DV are posted to chat.</span></div></div>
@@ -597,13 +908,20 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
       </div>
     </div>
   </section>`;
+  const bodyField = `<section class="citinet-dialog-section citinet-wide citinet-rich-editor" data-rich-editor>
+      <div class="citinet-dialog-section-head"><div><strong>Body</strong><span>Use the visual editor for normal formatting or switch to HTML Source for direct markup.</span></div><div class="citinet-editor-modes"><button type="button" class="is-active" data-rich-mode="visual"><i class="fas fa-wand-magic-sparkles"></i> Visual</button><button type="button" data-rich-mode="source"><i class="fas fa-code"></i> HTML Source</button></div></div>
+      <div class="citinet-prosemirror editor prosemirror" data-rich-frame><div class="editor-content" data-rich-visual></div></div>
+      <textarea name="body" data-rich-source hidden>${ctEsc(item.body)}</textarea>
+      <div class="citinet-dialog-help">Foundry document links and inline rolls are supported. Web addresses remain display-only and cannot open an external browser.</div>
+      <div class="citinet-dialog-help is-warning" data-rich-fallback hidden>The visual editor could not start, so HTML Source mode is active.</div>
+    </section>`;
   const content = `<form class="citinet-dialog citinet-dialog-grid">
     ${primaryFields}
     <section class="citinet-dialog-section citinet-wide">
       <div class="citinet-dialog-section-head"><div><strong>Primary Image</strong><span>Shown above the body. Wide banners scale down to fit; smaller icon art keeps its natural size instead of stretching. CitiNet pages also use it as their directory thumbnail.</span></div><button type="button" data-pick-image><i class="fas fa-image"></i> Browse</button></div>
       <input name="image" value="${ctEsc(item.image)}" placeholder="icons/... or modules/...">
     </section>
-    <label class="citinet-wide">Body (HTML and Foundry document links supported)<textarea name="body">${ctEsc(item.body)}</textarea><div class="citinet-dialog-help">Web addresses remain display-only text and can never open an external browser from this simulated network.</div></label>
+    ${bodyField}
     ${randomTableField}
     <section class="citinet-dialog-section citinet-wide">
       <div class="citinet-dialog-section-head"><div><strong>Gallery Images</strong><span>Additional clickable thumbnails shown after the body. Add one Foundry image path per line.</span></div><div><button type="button" data-add-gallery-image><i class="fas fa-plus"></i> Add Image</button><button type="button" data-clear-gallery><i class="fas fa-eraser"></i> Clear</button></div></div>
@@ -617,6 +935,7 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
   </form>`;
   return new Promise(resolve => {
     let settled = false;
+    let richEditorController = null;
     const finish = value => { if (!settled) { settled = true; resolve(value); } };
     const viewportHeight = Math.max(520, Number(globalThis.innerHeight || 900));
     const viewportWidth = Math.max(520, Number(globalThis.innerWidth || 1200));
@@ -630,10 +949,12 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
           label: "Save",
           icon: '<i class="fas fa-save"></i>',
           callback: html => {
-            const fd = new FormData(ctFormRoot(html));
-            const submittedLockId = hblReady ? String(fd.get("lockPuzzleId") || "") : item.lockPuzzleId;
-            const selectedPuzzle = puzzleOptions.find(puzzle => puzzle.id === submittedLockId);
-            const previousLock = item.lockPuzzleId;
+            const form = ctFormRoot(html);
+            ctSyncRichTextValue(form);
+            const fd = new FormData(form);
+            const submittedLockKey = hblReady ? String(fd.get("lockPuzzleId") || "") : currentLockKey;
+            const selectedPuzzle = puzzleOptions.find(puzzle => puzzle.selectionKey === submittedLockKey);
+            const previousLock = currentLockKey;
             const next = ctNormalizeContent({
               ...item,
               subject: fd.get("subject"), from: fd.get("from"), to: fd.get("to"),
@@ -647,8 +968,8 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
               },
               randomTable: isFile ? { ...randomTable, drawCount: fd.get("randomTableDrawCount") } : ctEmptyRandomTable(),
               traceCost: fd.get("traceCost"), published: fd.has("published"),
-              lockPuzzleId: selectedPuzzle?.id || "", lockPuzzleName: selectedPuzzle?.name || "", lockSceneId: selectedPuzzle?.sceneId || "",
-              lockRevision: previousLock === (selectedPuzzle?.id || "") ? item.lockRevision : item.lockRevision + 1,
+              lockPuzzleId: selectedPuzzle?.id || "", lockPuzzleName: selectedPuzzle?.name || "", lockPuzzleScope: selectedPuzzle?.scope || "scene", lockSceneId: selectedPuzzle?.sceneId || "",
+              lockRevision: previousLock === (selectedPuzzle?.selectionKey || "") ? item.lockRevision : item.lockRevision + 1,
               updatedAt: ctNow()
             }, kind);
             finish(next);
@@ -661,6 +982,10 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
         ctDialogClass(dialog, html, "citinet-content-editor-host");
         const root = html?.[0];
         const form = ctFormRoot(html);
+        ctActivateRichTextEditor(form).then(controller => {
+          if (settled) controller?.destroy?.();
+          else richEditorController = controller;
+        }).catch(error => console.warn(`${CT_ID} | Rich-text editor setup failed; HTML Source remains active.`, error));
         const galleryInput = form?.querySelector?.("[data-gallery-paths]");
         const galleryPreview = form?.querySelector?.("[data-gallery-preview]");
         const refreshGallery = () => {
@@ -707,6 +1032,14 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
           if (name) name.textContent = randomTable.name || "Drop RollTable Here";
           if (status) status.textContent = randomTable.uuid ? `${randomTable.results.length} snapshotted results // ${randomTable.formula}` : "World and compendium RollTables are supported.";
           if (remove) remove.hidden = !randomTable.uuid;
+          const state = form?.querySelector?.("[data-shared-roll-state]");
+          const reroll = form?.querySelector?.("[data-reroll-shared]");
+          const clear = form?.querySelector?.("[data-clear-shared]");
+          if (state) state.textContent = randomTable.sharedDraw
+            ? `LOCKED // ${randomTable.sharedDraw.results.length} shared result${randomTable.sharedDraw.results.length === 1 ? "" : "s"}`
+            : "UNREVEALED // first live open will roll";
+          if (reroll) reroll.disabled = !randomTable.uuid;
+          if (clear) clear.disabled = !randomTable.sharedDraw;
         };
         tableDrop?.addEventListener("dragover", event => { event.preventDefault(); tableDrop.classList.add("is-drag"); });
         tableDrop?.addEventListener("dragleave", event => { event.preventDefault(); tableDrop.classList.remove("is-drag"); });
@@ -724,8 +1057,25 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
           randomTable = ctEmptyRandomTable();
           refreshTable();
         });
+        form?.querySelector?.("[data-reroll-shared]")?.addEventListener("click", async event => {
+          event.preventDefault();
+          randomTable = ctNormalizeRandomTable({ ...randomTable, drawCount: form.querySelector("[name='randomTableDrawCount']")?.value });
+          if (!randomTable.uuid || !randomTable.results.length) return ui.notifications.warn("Add a RollTable with at least one result before rerolling.");
+          randomTable.sharedDraw = await ctCreateSharedRandomDraw(randomTable, game.user);
+          refreshTable();
+          ui.notifications.info("A new shared result is staged. Press Save to publish it to every player.");
+        });
+        form?.querySelector?.("[data-clear-shared]")?.addEventListener("click", event => {
+          event.preventDefault();
+          randomTable.sharedDraw = null;
+          refreshTable();
+          ui.notifications.info("The shared reveal is staged for clearing. Press Save; the next live open will roll it again.");
+        });
       },
-      close: () => finish(null)
+      close: () => {
+        richEditorController?.destroy?.();
+        finish(null);
+      }
     }, { width: dialogWidth, height: dialogHeight, resizable: true });
     dialog.render(true);
   });
@@ -750,10 +1100,11 @@ class CitiNetManagerApp extends Application {
     const db = await ctLoadDB();
     const terminals = Object.values(db.terminals).sort((a, b) => a.name.localeCompare(b.name)).map(terminal => ({
       ...terminal,
-      icon: terminal.type === "autofixer" ? "fa-car-side" : "fa-desktop",
-      typeLabel: terminal.type === "autofixer" ? "Autofixer" : "Computer",
+      icon: terminal.type === "autofixer" ? "fa-car-side" : terminal.storageScope === "world" ? "fa-laptop" : "fa-desktop",
+      typeLabel: terminal.type === "autofixer" ? "Autofixer" : terminal.storageScope === "world" ? "Portable Computer" : "Computer",
+      scopeLabel: terminal.storageScope === "world" ? "Portable (World)" : "Scene-local",
       citinetModeLabel: terminal.citinetMode === "online" ? "CitiNet Online" : "CitiNet Cache",
-      sceneLabel: terminal.sceneId ? (game.scenes.get(terminal.sceneId)?.name || "Missing Scene") : "Any Scene",
+      sceneLabel: terminal.storageScope === "world" ? "Any Scene" : terminal.sceneId ? (game.scenes.get(terminal.sceneId)?.name || "Missing Scene") : "Current Scene",
       bindingLabel: `${ctBindingCount(terminal.id)} Tile binding${ctBindingCount(terminal.id) === 1 ? "" : "s"}`,
       emailCount: terminal.emails.length,
       fileCount: terminal.files.length,
@@ -784,11 +1135,15 @@ class CitiNetManagerApp extends Application {
     const action = button.dataset.action;
     const terminalId = button.closest("[data-terminal-id]")?.dataset.terminalId;
     const netpageId = button.closest("[data-netpage-id]")?.dataset.netpageId;
-    if (action === "new-computer" || action === "new-autofixer") {
+    if (action === "new-computer" || action === "new-portable" || action === "new-autofixer") {
       const type = action === "new-autofixer" ? "autofixer" : "computer";
-      const name = await ctPromptName(type === "autofixer" ? "New Autofixer Terminal" : "New Computer Terminal", type === "autofixer" ? "Autofixer Terminal" : "New Terminal");
+      const storageScope = action === "new-portable" ? "world" : "scene";
+      const name = await ctPromptName(
+        type === "autofixer" ? "New Autofixer Terminal" : storageScope === "world" ? "New Portable / Laptop Terminal" : "New Computer Terminal",
+        type === "autofixer" ? "Autofixer Terminal" : storageScope === "world" ? "Portable Terminal" : "New Terminal"
+      );
       if (!name) return;
-      const terminal = ctNewTerminal(type, name);
+      const terminal = ctNewTerminal(type, name, storageScope);
       const db = await ctLoadDB();
       db.terminals[terminal.id] = terminal;
       await ctSaveDB(db, { terminalId: terminal.id });
@@ -807,6 +1162,7 @@ class CitiNetManagerApp extends Application {
     if (action === "edit") return ctOpenEditor(terminalId);
     if (action === "preview") return ctOpenTerminal(terminalId, { gmPreview: true });
     if (action === "bind") { await ctBindSelectedTiles(terminalId); return this.render(false); }
+    if (action === "unbind") { await ctUnbindSelectedTiles(terminalId); return this.render(false); }
     if (action === "reset-trace") { await ctResetTrace(terminalId); return this.render(false); }
     if (action === "delete") {
       const db = await ctLoadDB();
@@ -906,6 +1262,13 @@ class CitiNetTerminalEditorApp extends FormApplication {
         { value: "cached", label: "Cached / Offline", selected: terminal.citinetMode !== "online" },
         { value: "online", label: "Online (Roleplay)", selected: terminal.citinetMode === "online" }
       ],
+      storageScopeOptions: [
+        { value: "scene", label: "Scene-local", selected: terminal.storageScope !== "world" },
+        { value: "world", label: "Portable (World)", selected: terminal.storageScope === "world" }
+      ],
+      scopeHelp: terminal.storageScope === "world"
+        ? "Portable bindings work on any Scene. Copy this bound laptop Tile or bind another Tile to the same profile."
+        : "Scene-local bindings only open on this terminal's assigned Scene.",
       emails: terminal.emails.map(item => ({ ...item, locked: Boolean(item.lockPuzzleId), lockName: item.lockPuzzleName || item.lockPuzzleId })),
       files: terminal.files.map(item => ({
         ...item,
@@ -915,7 +1278,7 @@ class CitiNetTerminalEditorApp extends FormApplication {
         randomTableName: item.randomTable?.name || "RollTable"
       })),
       vehicles: terminal.vehicles.map(item => ({ ...item, sourceLabel: item.uuid || "Embedded snapshot" })),
-      sceneLabel: scene?.name || "No active scene",
+      sceneLabel: terminal.storageScope === "world" ? "Portable (World) // any Scene" : (game.scenes.get(terminal.sceneId)?.name || scene?.name || "No active scene"),
       bindingCount: ctBindingCount(terminal.id)
     };
   }
@@ -949,7 +1312,7 @@ class CitiNetTerminalEditorApp extends FormApplication {
     const list = kind === "email" ? this.terminal.emails : kind === "file" ? this.terminal.files : null;
     if (action === "add-email" || action === "add-file") {
       const addKind = action === "add-email" ? "email" : "file";
-      const item = await ctContentEditor(addKind, null, await ctScenePuzzleOptions());
+      const item = await ctContentEditor(addKind, null, await ctHexcodePuzzleOptions());
       if (!item) return;
       this.terminal[addKind === "email" ? "emails" : "files"].push(item);
       return this.render(false);
@@ -957,7 +1320,7 @@ class CitiNetTerminalEditorApp extends FormApplication {
     if (action === "edit-content" && list) {
       const index = list.findIndex(entry => entry.id === id);
       if (index < 0) return;
-      const item = await ctContentEditor(kind, list[index], await ctScenePuzzleOptions());
+      const item = await ctContentEditor(kind, list[index], await ctHexcodePuzzleOptions());
       if (!item) return;
       list[index] = item;
       return this.render(false);
@@ -983,12 +1346,21 @@ class CitiNetTerminalEditorApp extends FormApplication {
       return this.render(false);
     }
     if (action === "preview") {
+      const requestedScope = ctStorageScope(event.currentTarget.closest("form")?.querySelector("[name='storageScope']")?.value);
       await this.submit({ preventClose: true });
+      if (this.terminal?.storageScope !== requestedScope) return;
       return ctOpenTerminal(this.terminalId, { gmPreview: true, forceNew: true });
     }
     if (action === "bind") {
+      const requestedScope = ctStorageScope(event.currentTarget.closest("form")?.querySelector("[name='storageScope']")?.value);
       await this.submit({ preventClose: true });
+      if (this.terminal?.storageScope !== requestedScope) return;
       await ctBindSelectedTiles(this.terminalId);
+      return this.render(false);
+    }
+    if (action === "unbind") {
+      await this.submit({ preventClose: true });
+      await ctUnbindSelectedTiles(this.terminalId);
       return this.render(false);
     }
     if (action === "close") return this.close();
@@ -1027,13 +1399,34 @@ class CitiNetTerminalEditorApp extends FormApplication {
   async _updateObject(_event, formData) {
     const terminal = await this._ensureTerminal();
     if (!terminal) return;
+    const previousScope = ctStorageScope(terminal.storageScope, terminal.sceneOnly);
+    const targetScope = ctStorageScope(formData.storageScope);
+    const activeScene = ctScene();
+    let bindingMigration = { updated: 0, removed: 0 };
+    if (previousScope !== targetScope) {
+      if (targetScope === "scene" && !activeScene) {
+        ui.notifications.warn("Activate the Scene that should own this terminal before moving it to Scene-local storage.");
+        return;
+      }
+      const movingPortable = targetScope === "world";
+      const confirmed = await ctConfirm(
+        movingPortable ? "Move Terminal to Portable World?" : "Move Terminal to Current Scene?",
+        movingPortable
+          ? `<p>Move <b>${ctEsc(terminal.name)}</b> to <b>Portable (World)</b>?</p><p>Existing Tile bindings will be upgraded and will work when copied or rebound on any Scene.</p>`
+          : `<p>Move <b>${ctEsc(terminal.name)}</b> to <b>${ctEsc(activeScene.name)}</b>?</p><p>Bindings on this Scene will become Scene-local; portable bindings on other Scenes will be removed.</p>`,
+        movingPortable ? "Move to Portable" : "Move to Scene"
+      );
+      if (!confirmed) return;
+      bindingMigration = await ctMigrateTerminalBindings(terminal, previousScope, targetScope, activeScene?.id || null);
+    }
     const traceRevision = Math.max(1, Math.trunc(ctNum(terminal.trace?.revision, 1)));
     terminal.name = String(formData.name || terminal.name).trim();
     terminal.subtitle = String(formData.subtitle || "").trim();
     terminal.type = formData.type === "autofixer" ? "autofixer" : "computer";
     terminal.startView = String(formData.startView || "home");
     terminal.citinetMode = formData.citinetMode === "online" ? "online" : "cached";
-    terminal.sceneOnly = Boolean(formData.sceneOnly);
+    terminal.storageScope = targetScope;
+    terminal.sceneOnly = targetScope === "scene";
     terminal.enabled = {
       inbox: Boolean(formData["enabled.inbox"]), files: Boolean(formData["enabled.files"]),
       citinet: Boolean(formData["enabled.citinet"]), autofixer: Boolean(formData["enabled.autofixer"])
@@ -1047,12 +1440,15 @@ class CitiNetTerminalEditorApp extends FormApplication {
       revision: traceRevision
     };
     terminal.trace.warnAt = Math.min(terminal.trace.warnAt, terminal.trace.max);
-    if (terminal.sceneOnly && !terminal.sceneId) terminal.sceneId = ctScene()?.id || "";
+    terminal.sceneId = targetScope === "scene" ? (activeScene?.id || terminal.sceneId || "") : "";
     terminal.updatedAt = ctNow();
     const db = await ctLoadDB();
     db.terminals[terminal.id] = ctNormalizeTerminal(terminal);
     await ctSaveDB(db, { terminalId: terminal.id });
-    ui.notifications.info(`Saved ${terminal.name}.`);
+    const migrationText = bindingMigration.updated || bindingMigration.removed
+      ? ` Updated ${bindingMigration.updated} binding${bindingMigration.updated === 1 ? "" : "s"}${bindingMigration.removed ? ` and removed ${bindingMigration.removed} off-scene binding${bindingMigration.removed === 1 ? "" : "s"}` : ""}.`
+      : "";
+    ui.notifications.info(`Saved ${terminal.name}.${migrationText}`);
     this.terminal = ctClone(db.terminals[terminal.id]);
     ctManagerApp?.render(false);
   }
@@ -1060,6 +1456,96 @@ class CitiNetTerminalEditorApp extends FormApplication {
 
 const ctPlayerApps = new Map();
 const ctPendingBreaches = new WeakMap();
+const ctPendingRandomReveals = new Map();
+const ctRandomRevealLocks = new Map();
+
+function ctUserMayRevealRandomFile(user, terminal, file) {
+  if (!user || !terminal || !file) return false;
+  if (user.isGM) return true;
+  if (!file.published) return false;
+  if (!file.lockPuzzleId) return true;
+  const unlocks = user.getFlag?.(CT_ID, CT_UNLOCK_FLAG);
+  return Boolean(unlocks && typeof unlocks === "object" && unlocks[ctUnlockKey(terminal, "file", file)]);
+}
+
+async function ctEnsureSharedRandomDraw(terminalId, fileId, requestUserId = game.user.id) {
+  if (!game.user.isGM) throw new Error("Only the GM may publish a shared randomized reveal.");
+  const key = `${terminalId}:${fileId}`;
+  const active = ctRandomRevealLocks.get(key);
+  if (active) return active;
+  const task = (async () => {
+    const db = await ctLoadDB();
+    const terminal = db.terminals[terminalId];
+    const file = terminal?.files.find(entry => entry.id === fileId);
+    const user = game.users.get(requestUserId);
+    if (!terminal || !file) throw new Error("The requested randomized file no longer exists.");
+    if (!ctUserMayRevealRandomFile(user, terminal, file)) throw new Error("The requesting user is not authorized to reveal this file.");
+    const table = ctNormalizeRandomTable(file.randomTable);
+    if (!table.uuid || !table.results.length) return null;
+    if (table.sharedDraw) return table.sharedDraw;
+    const sharedDraw = await ctCreateSharedRandomDraw(table, user);
+    if (!sharedDraw) throw new Error("The RollTable snapshot could not produce a result.");
+    file.randomTable = { ...table, sharedDraw };
+    await ctSaveDB(db, { terminalId, refresh: false });
+    return sharedDraw;
+  })();
+  ctRandomRevealLocks.set(key, task);
+  try { return await task; }
+  finally { if (ctRandomRevealLocks.get(key) === task) ctRandomRevealLocks.delete(key); }
+}
+
+async function ctHandleSharedRandomRequest(message) {
+  if (!game.user.isGM || ctPrimaryActiveGM()?.id !== game.user.id) return;
+  const response = {
+    op: "shared-random-response",
+    requestId: String(message.requestId || ""),
+    userId: String(message.userId || ""),
+    terminalId: String(message.terminalId || ""),
+    fileId: String(message.fileId || ""),
+    ok: false,
+    sharedDraw: null,
+    error: ""
+  };
+  try {
+    response.sharedDraw = await ctEnsureSharedRandomDraw(response.terminalId, response.fileId, response.userId);
+    response.ok = Boolean(response.sharedDraw);
+    if (!response.ok) response.error = "This file has no usable randomized data.";
+  } catch (error) {
+    response.error = String(error?.message || error || "The shared reveal failed.");
+    console.warn(`${CT_ID} | Shared randomized reveal request failed.`, error);
+  }
+  game.socket.emit(CT_SOCKET, response);
+  if (response.ok) game.socket.emit(CT_SOCKET, { op: "shared-random-published", terminalId: response.terminalId, fileId: response.fileId });
+}
+
+async function ctRequestSharedRandomDraw(terminalId, fileId) {
+  const primaryGM = ctPrimaryActiveGM();
+  if (game.user.isGM && primaryGM?.id === game.user.id) {
+    try {
+      const sharedDraw = await ctEnsureSharedRandomDraw(terminalId, fileId, game.user.id);
+      if (sharedDraw) game.socket.emit(CT_SOCKET, { op: "shared-random-published", terminalId, fileId });
+      return sharedDraw;
+    }
+    catch (error) {
+      ui.notifications.warn(String(error?.message || "The shared reveal failed."));
+      return null;
+    }
+  }
+  if (!primaryGM) {
+    ui.notifications.warn("A GM must be connected before the first shared RollTable reveal can be locked.");
+    return null;
+  }
+  const requestId = ctId();
+  return new Promise(resolve => {
+    const timer = globalThis.setTimeout(() => {
+      ctPendingRandomReveals.delete(requestId);
+      ui.notifications.warn("The GM did not answer the shared RollTable request. Try again once the GM is connected.");
+      resolve(null);
+    }, 6000);
+    ctPendingRandomReveals.set(requestId, { resolve, timer });
+    game.socket.emit(CT_SOCKET, { op: "shared-random-request", requestId, userId: game.user.id, terminalId, fileId });
+  });
+}
 
 function ctOpenManager() {
   if (!game.user.isGM) return ui.notifications.warn("Only the GM can open CitiNet Terminal Manager.");
@@ -1090,12 +1576,20 @@ function ctReadUserFlag(flag) {
 }
 
 function ctUnlockKey(terminal, kind, item) {
-  return [terminal.id, kind, item.id, item.lockPuzzleId || "none", item.lockRevision || 1].join(":");
+  const parts = [terminal.id, kind, item.id];
+  if (item.lockPuzzleScope === "world") parts.push("world");
+  parts.push(item.lockPuzzleId || "none", item.lockRevision || 1);
+  return parts.join(":");
 }
 
 function ctIsUnlocked(terminal, kind, item) {
-  if (game.user.isGM || !item?.lockPuzzleId) return true;
+  if (!item?.lockPuzzleId) return true;
   return Boolean(ctReadUserFlag(CT_UNLOCK_FLAG)[ctUnlockKey(terminal, kind, item)]);
+}
+
+function ctHasVerifiedContentUnlock(actor, terminal, kind, item) {
+  if (!item?.lockPuzzleId) return true;
+  return ctIsNetrunner(actor) && ctIsUnlocked(terminal, kind, item);
 }
 
 async function ctGrantUnlock(terminal, kind, item) {
@@ -1282,14 +1776,14 @@ function ctWeightedResult(results) {
   return results[results.length - 1] || null;
 }
 
-async function ctDrawRandomTable(table) {
+async function ctSelectRandomResults(table) {
   const normalized = ctNormalizeRandomTable(table);
-  if (!normalized.uuid || !normalized.results.length) return { html: "", images: [] };
+  if (!normalized.uuid || !normalized.results.length) return [];
   const drawn = [];
   for (let index = 0; index < normalized.drawCount; index += 1) {
     let selected = null;
     try {
-      const roll = await new Roll(normalized.formula || "1d20").evaluate({ async: true });
+      const roll = await new Roll(normalized.formula || "1d20").evaluate();
       const total = Math.trunc(ctNum(roll.total, 0));
       selected = normalized.results.find(result => result.range.length >= 2 && total >= result.range[0] && total <= result.range[1]) || null;
     } catch (error) {
@@ -1297,14 +1791,40 @@ async function ctDrawRandomTable(table) {
     }
     drawn.push(selected || ctWeightedResult(normalized.results));
   }
-  const valid = drawn.filter(Boolean);
+  return drawn.filter(Boolean).map(result => ({ text: String(result.text || ""), img: String(result.img || "") }));
+}
+
+async function ctCreateSharedRandomDraw(table, user = null) {
+  const normalized = ctNormalizeRandomTable(table);
+  const results = await ctSelectRandomResults(normalized);
+  if (!results.length) return null;
+  return {
+    sourceKey: ctRandomTableSourceKey(normalized),
+    results,
+    drawnAt: ctNow(),
+    drawnByUserId: String(user?.id || ""),
+    drawnByName: String(user?.name || "")
+  };
+}
+
+async function ctRenderRandomDraw(table, sharedDraw, { preview = false } = {}) {
+  const normalized = ctNormalizeRandomTable(table);
+  const draw = sharedDraw && sharedDraw.sourceKey === ctRandomTableSourceKey(normalized) ? sharedDraw : null;
+  const valid = Array.isArray(draw?.results) ? draw.results.filter(result => result?.text || result?.img) : [];
+  if (!valid.length) return { html: "", images: [] };
   const textBlocks = [];
   for (const result of valid) {
     if (result.text) textBlocks.push(`<div class="citinet-random-result">${await ctEnrich(result.text)}</div>`);
   }
   const images = valid.map(result => result.img).filter(Boolean);
-  const html = textBlocks.length ? `<section class="citinet-random-data"><header><i class="fas fa-dice-d20"></i><span>RANDOMIZED DATA // ${ctEsc(normalized.name)}</span></header>${textBlocks.join("")}</section>` : "";
+  const state = preview ? "GM PREVIEW // TEMPORARY DRAW" : "SHARED REVEAL // LOCKED FOR ALL PLAYERS";
+  const html = textBlocks.length ? `<section class="citinet-random-data ${preview ? "is-preview" : "is-shared"}"><header><i class="fas fa-dice-d20"></i><span>${ctEsc(normalized.name)} // ${state}</span></header>${textBlocks.join("")}</section>` : "";
   return { html, images };
+}
+
+async function ctDrawRandomTable(table, options = {}) {
+  const draw = await ctCreateSharedRandomDraw(table, game.user);
+  return ctRenderRandomDraw(table, draw, options);
 }
 
 function ctShardSkillLabel(skill) {
@@ -1343,7 +1863,8 @@ class CitiNetPlayerApp extends Application {
     this.history = [];
     this.historyIndex = -1;
     this.purchasing = new Set();
-    this.randomDraws = new Map();
+    this.previewRandomDraws = new Map();
+    this.randomRevealRequests = new Map();
     this.previewUnlocks = new Set();
     this.trace = null;
     this.actor = null;
@@ -1436,11 +1957,9 @@ class CitiNetPlayerApp extends Application {
   _isContentUnlocked(kind, item) {
     if (!item?.lockPuzzleId) return true;
     if (this.gmPreview) return this.previewUnlocks.has(ctUnlockKey(this.terminal, kind, item));
-    if (game.user.isGM) return true;
     this.actor = ctGetActor();
     this.isNetrunner = ctIsNetrunner(this.actor);
-    if (!this.isNetrunner) return false;
-    return ctIsUnlocked(this.terminal, kind, item);
+    return ctHasVerifiedContentUnlock(this.actor, this.terminal, kind, item);
   }
 
   _hasLiveTrace() {
@@ -1517,8 +2036,27 @@ class CitiNetPlayerApp extends Application {
     if (!item) return `${ctPageTitle("LOCAL STORAGE", "File unavailable")}<div class="citinet-empty">The requested file does not exist.</div>`;
     if (!this._isContentUnlocked("file", item)) return ctLockHtml(item, "file", this.gmPreview, this.isNetrunner);
     if (!game.user.isGM) await ctMarkRead(this.terminal.id, "file", item.id);
-    if (!this.randomDraws.has(item.id)) this.randomDraws.set(item.id, await ctDrawRandomTable(item.randomTable));
-    const random = this.randomDraws.get(item.id) || { html: "", images: [] };
+    let sharedDraw = item.randomTable?.sharedDraw || null;
+    let preview = false;
+    if (item.randomTable?.uuid && item.randomTable?.results?.length) {
+      if (this.gmPreview && !sharedDraw) {
+        preview = true;
+        if (!this.previewRandomDraws.has(item.id)) this.previewRandomDraws.set(item.id, await ctCreateSharedRandomDraw(item.randomTable, game.user));
+        sharedDraw = this.previewRandomDraws.get(item.id);
+      } else if (!sharedDraw) {
+        if (!this.randomRevealRequests.has(item.id)) {
+          this.randomRevealRequests.set(item.id, ctRequestSharedRandomDraw(this.terminal.id, item.id));
+        }
+        try { sharedDraw = await this.randomRevealRequests.get(item.id); }
+        finally { this.randomRevealRequests.delete(item.id); }
+      }
+    }
+    const random = sharedDraw
+      ? await ctRenderRandomDraw(item.randomTable, sharedDraw, { preview })
+      : (item.randomTable?.uuid ? {
+          html: `<section class="citinet-random-data is-pending"><header><i class="fas fa-clock"></i><span>SHARED REVEAL // WAITING FOR GM AUTHORITY</span></header><div class="citinet-random-result">The RollTable result has not been locked yet. Reopen this file while a GM is connected.</div></section>`,
+          images: []
+        } : { html: "", images: [] });
     return `<article class="citinet-article">${ctPageTitle(item.fileType, item.title, item.date)}${ctHeroHtml(item)}<div class="citinet-richtext">${await ctEnrich(item.body)}</div>${random.html}${ctGalleryHtml(item, random.images)}${ctShardExportHtml(item, "file", this.isNetrunner)}</article>`;
   }
 
@@ -1654,13 +2192,13 @@ class CitiNetPlayerApp extends Application {
     if (kind === "file") item = terminal.files.find(entry => entry.id === itemId);
     if (kind === "netpage") item = db.netpages[itemId];
     if (!item || (!item.published && !game.user.isGM)) return ui.notifications.warn("That content is no longer available.");
-    if (item.lockPuzzleId && !this._isContentUnlocked(kind, item)) {
+    const actor = ctGetActor();
+    if (!actor) return ui.notifications.warn("Select a Token or assign a Player Character before exporting.");
+    if (!ctHasVerifiedContentUnlock(actor, terminal, kind, item)) {
       return ui.notifications.warn("This content must be unlocked by an authorized Netrunner through Hexcode Breach before it can be exported.");
     }
     const config = ctNormalizeShardExport(item.shardExport);
     if (!config.enabled) return ui.notifications.warn("Shard export is disabled for this content.");
-    const actor = ctGetActor();
-    if (!actor) return ui.notifications.warn("Select a Token or assign a Player Character before exporting.");
     const memoryChip = ctMemoryChipState(actor);
     if (!memoryChip.ready) return ui.notifications.warn(memoryChip.warning);
     const isNetrunner = ctIsNetrunner(actor);
@@ -1745,7 +2283,8 @@ async function ctStartBreach(playerApp, kind, itemId) {
   if (!item?.lockPuzzleId) return ui.notifications.warn("This content has no Hexcode lock.");
   if (playerApp._isContentUnlocked(kind, item)) return playerApp.render(false);
   const scene = ctScene();
-  if (item.lockSceneId && scene?.id !== item.lockSceneId) return ui.notifications.warn(`This lock belongs to ${game.scenes.get(item.lockSceneId)?.name || "a different scene"}.`);
+  const puzzleScope = item.lockPuzzleScope === "world" ? "world" : "scene";
+  if (puzzleScope === "scene" && item.lockSceneId && scene?.id !== item.lockSceneId) return ui.notifications.warn(`This lock belongs to ${game.scenes.get(item.lockSceneId)?.name || "a different scene"}.`);
   const installedHbl = game.modules.get(CT_HBL_ID);
   const api = ctHexcodeModule()?.api;
   if (!api?.openPuzzle) {
@@ -1762,7 +2301,7 @@ async function ctStartBreach(playerApp, kind, itemId) {
       : "Only an Actor with the Netrunner Role or Interface Role Ability can initiate Hexcode Breach.";
     return ui.notifications.warn(message);
   }
-  const breachApp = await api.openPuzzle(item.lockPuzzleId, { actor });
+  const breachApp = await api.openPuzzle(item.lockPuzzleId, { actor, scope: puzzleScope, sceneId: puzzleScope === "scene" ? (item.lockSceneId || scene?.id || null) : null });
   if (!breachApp) return null;
   ctPendingBreaches.set(breachApp, {
     playerApp,
@@ -1770,6 +2309,8 @@ async function ctStartBreach(playerApp, kind, itemId) {
     kind,
     itemId,
     puzzleId: item.lockPuzzleId,
+    puzzleScope,
+    sceneId: puzzleScope === "scene" ? (item.lockSceneId || scene?.id || "") : "",
     actorId: String(actor.id || ""),
     actorUuid: String(actor.uuid || ""),
     userId: game.user.id,
@@ -1783,7 +2324,7 @@ async function ctOpenTerminal(terminalId, options = {}) {
   const terminal = db.terminals[terminalId];
   if (!terminal) return ui.notifications.warn(`CitiNet terminal not found: ${terminalId}`);
   const sceneId = ctScene()?.id || "";
-  if (terminal.sceneOnly && terminal.sceneId && terminal.sceneId !== sceneId && !game.user.isGM) return ui.notifications.warn("This terminal is not available on the active scene.");
+  if (terminal.storageScope === "scene" && terminal.sceneId && terminal.sceneId !== sceneId && !game.user.isGM) return ui.notifications.warn("This Scene-local terminal is not available on the active scene.");
   if (!options.forceNew) {
     const existing = ctPlayerApps.get(terminalId);
     if (existing?.rendered) {
@@ -1897,7 +2438,10 @@ async function ctOpenFromArgs(args = null) {
   const tile = await ctFindTriggerTile(args);
   const binding = tile?.getFlag?.(CT_ID, CT_BINDING_FLAG);
   if (binding?.terminalId) {
-    if (binding.sceneId && binding.sceneId !== ctScene()?.id) return ui.notifications.warn("This terminal Tile belongs to a different scene.");
+    const terminal = db.terminals[binding.terminalId];
+    if (!terminal) return ui.notifications.warn(`CitiNet terminal not found: ${binding.terminalId}`);
+    const scope = ctBindingScope(binding, terminal);
+    if (scope === "scene" && binding.sceneId && binding.sceneId !== ctScene()?.id) return ui.notifications.warn("This Scene-local terminal Tile belongs to a different scene.");
     return ctOpenTerminal(binding.terminalId);
   }
   if (game.user.isGM) return ctOpenManager();
@@ -1944,6 +2488,17 @@ function ctBindSocket() {
   game.socket.on(CT_SOCKET, message => {
     if (!message) return;
     if (message.op === "refresh") ctRefreshOpenWindows(message.terminalId || null);
+    if (message.op === "shared-random-request") ctHandleSharedRandomRequest(message);
+    if (message.op === "shared-random-response" && message.userId === game.user.id) {
+      const pending = ctPendingRandomReveals.get(String(message.requestId || ""));
+      if (pending) {
+        globalThis.clearTimeout(pending.timer);
+        ctPendingRandomReveals.delete(String(message.requestId || ""));
+        if (!message.ok && message.error) ui.notifications.warn(message.error);
+        pending.resolve(message.ok ? message.sharedDraw : null);
+      }
+    }
+    if (message.op === "shared-random-published") ctRefreshOpenWindows(message.terminalId || null, { skipEditor: true });
     if (message.op === "trace-reset") {
       ctRefreshOpenWindows(message.terminalId || null);
       if (!game.user.isGM) ui.notifications.info("The GM reset this terminal's trace record.");
@@ -2003,6 +2558,7 @@ Hooks.once("ready", () => {
     openTerminal: ctOpenTerminal,
     openFromArgs: ctOpenFromArgs,
     bindSelectedTiles: ctBindSelectedTiles,
+    unbindSelectedTiles: ctUnbindSelectedTiles,
     createHelperMacro: ctCreateHelperMacro,
     loadDB: ctLoadDB,
     saveDB: ctSaveDB
@@ -2036,7 +2592,7 @@ Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
   if (!pending || pending.userId !== game.user.id) return;
 
   // Foundry fires the class-named close hook automatically during
-  // Application#close. Hexcode v1.0.5 then fires the same hook again with the
+  // Application#close. Hexcode's explicit result contract then fires the same hook again with the
   // explicit outcome contract after super.close() completes. Ignore the first
   // framework event without consuming the pending breach handshake.
   const outcomes = new Set(["success", "partial", "failure", "aborted"]);
@@ -2044,8 +2600,10 @@ Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
     && typeof resultData === "object"
     && outcomes.has(resultData.outcome)
     && Object.hasOwn(resultData, "puzzleId")
+    && Object.hasOwn(resultData, "puzzleScope")
     && Object.hasOwn(resultData, "solvedCount")
     && Object.hasOwn(resultData, "totalSequences")
+    && Array.isArray(resultData.solvedSequenceIds)
     && Object.hasOwn(resultData, "gmPreview");
   if (!hasOutcomeContract) return;
 
@@ -2053,15 +2611,21 @@ Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
   if (resultData.gmPreview) return;
 
   const samePuzzle = String(resultData.puzzleId || "") === String(pending.puzzleId || "");
+  const sameScope = (resultData.puzzleScope === "world" ? "world" : "scene") === pending.puzzleScope;
+  const sameScene = pending.puzzleScope === "world" || !pending.sceneId || String(resultData.sceneId || "") === pending.sceneId;
   const sameActor = pending.actorUuid
     ? String(resultData.actorUuid || "") === pending.actorUuid
     : pending.actorId
       ? String(resultData.actorId || "") === pending.actorId
       : true;
-  if (!samePuzzle || !sameActor) {
+  if (!samePuzzle || !sameScope || !sameScene || !sameActor) {
     console.warn(`${CT_ID} | Ignored a Hexcode result that did not match the pending CitiNet lock.`, {
       expectedPuzzleId: pending.puzzleId,
       receivedPuzzleId: resultData.puzzleId,
+      expectedPuzzleScope: pending.puzzleScope,
+      receivedPuzzleScope: resultData.puzzleScope,
+      expectedSceneId: pending.sceneId,
+      receivedSceneId: resultData.sceneId,
       expectedActorId: pending.actorId,
       receivedActorId: resultData.actorId
     });
@@ -2070,7 +2634,13 @@ Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
 
   const solvedCount = Math.max(0, Math.trunc(ctNum(resultData.solvedCount, 0)));
   const totalSequences = Math.max(0, Math.trunc(ctNum(resultData.totalSequences, 0)));
-  const fullSuccess = resultData.outcome === "success" && totalSequences > 0 && solvedCount === totalSequences;
+  const solvedSequenceIds = resultData.solvedSequenceIds.map(id => String(id || "")).filter(Boolean);
+  const uniqueSolvedSequenceIds = new Set(solvedSequenceIds);
+  const fullSuccess = resultData.outcome === "success"
+    && totalSequences > 0
+    && solvedCount === totalSequences
+    && solvedSequenceIds.length === totalSequences
+    && uniqueSolvedSequenceIds.size === totalSequences;
   if (!fullSuccess) {
     if (resultData.outcome === "partial") {
       ui.notifications.warn(`Partial breach secured ${solvedCount} of ${totalSequences} sequences, but CitiNet requires a full success. The content remains encrypted.`);
@@ -2081,7 +2651,7 @@ Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
   const db = await ctLoadDB();
   const terminal = db.terminals[pending.terminalId];
   const list = pending.kind === "email" ? terminal?.emails : terminal?.files;
-  const item = list?.find(entry => entry.id === pending.itemId && entry.lockPuzzleId === pending.puzzleId);
+  const item = list?.find(entry => entry.id === pending.itemId && entry.lockPuzzleId === pending.puzzleId && entry.lockPuzzleScope === pending.puzzleScope);
   if (!terminal || !item) return ui.notifications.warn("Breach succeeded, but the protected content or its lock changed.");
   if (pending.gmPreview) {
     pending.playerApp?.previewUnlocks?.add(ctUnlockKey(terminal, pending.kind, item));
@@ -2100,3 +2670,4 @@ Hooks.on("deleteTile", tile => {
 Hooks.on("updateTile", (_tile, changes) => {
   if (changes?.flags?.[CT_ID] !== undefined) ctRefreshOpenWindows();
 });
+
