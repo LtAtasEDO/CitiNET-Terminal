@@ -500,7 +500,8 @@
 .citinet-prosemirror .editor-content {
   min-height: 205px;
   padding: 11px;
-  color: var(--citinet-text);
+  color: var(--citinet-text) !important;
+  caret-color: var(--citinet-cyan);
   background: #070d10;
   font: 14px/1.5 Arial, sans-serif;
 }
