@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 — 2026-09-07
+
+- Fixed newly typed text in the native ProseMirror visual editor inheriting black text on CitiNET's black editor canvas.
+- Scoped the forced off-white text color and cyan caret to the editable visual canvas only, leaving Foundry's native toolbar, Format/Font/Table dropdowns, and authored HTML colors untouched.
+- Applied the shared fix to Email, Local File, and CitiNET Page editors. Existing content and world data require no migration.
+
 ## 1.0.0 — 2026-09-06
 
 - Promoted the live-validated `0.8.0-beta.8` codebase to CitiNET Terminal's first stable release.
@@ -18,7 +24,7 @@
 
 ## 0.8.0-beta.7 — 2026-09-06
 
-- Kept the CitiNET-styled outer ProseMirror controls—Format, Font, Table, lists, horizontal rule, image, link, clear formatting, and HTML source—including their cyan hover state.
+- Kept the requested CitiNET-styled outer ProseMirror controls—Format, Font, Table, lists, horizontal rule, image, link, clear formatting, and HTML source—including their cyan hover state.
 - Corrected the toolbar selector to target only the topmost `.editor-menu`. Nested Format, Font, and Table command trees no longer inherit the toolbar's forced flex layout, so only Foundry's native dropdown opens from each circled control.
 - Applied the shared fix to Email, Local File, and CitiNET Page editors without changing HTML Source, saved content, or Hexcode Breach Lite v1.2.0 behavior.
 
