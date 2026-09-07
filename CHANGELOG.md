@@ -1,9 +1,78 @@
 # Changelog
 
-## 0.7.6-beta.3 — 2026-09-01
-- Added explicit attribution and licensing acknowledgement for the updated `citinet-terminal.svg` asset as it uses the human-authored **[Square Terminal](https://lucide.dev/icons/square-terminal)** geometry from Lucide Icons v1.8.0.
-- Added `THIRD_PARTY_NOTICES.md` and a matching README section.
-- No interface or other behaviors changed.
+## 1.0.0 — 2026-09-06
+
+- Promoted the live-validated `0.8.0-beta.8` codebase to CitiNET Terminal's first stable release.
+- Includes Scene-local computers, World-portable laptops, Autofixer terminals, Tile binding and unbinding, Inbox email, Local Files, global CitiNET Pages, universal trace controls, and the generated Monk's Active Tile Triggers helper Macro.
+- Includes Foundry's native ProseMirror visual editor with HTML Source switching for Email, Local File, and CitiNET Page bodies.
+- Includes persistent shared RollTable File reveals: the first live player open locks one result for every player across terminal windows, Scenes, and restarts until the GM clears or rerolls it.
+- Includes Memory Chip-validated Shard exports and fail-closed encrypted content integration with Hexcode Breach Lite v1.2.0 or newer.
+- Existing terminal content, Tile bindings, read state, unlocks, traces, and shared reveals require no migration from `0.8.0-beta.8`.
+
+## 0.8.0-beta.8 — 2026-09-06
+
+- Replaced CitiNET's toolbar reconstruction with Foundry's complete native `.editor.prosemirror` host contract, matching the character-sheet and Journal editor structure.
+- Removed every CitiNET `.editor-menu` layout rule. Foundry now exclusively controls toolbar wrapping, nested menu visibility, and Format, Font, and Table dropdown placement; CitiNET retains only its normal yellow button and cyan-hover palette.
+- Confirmed the supplied browser log contains no CitiNET or ProseMirror runtime failure—the beta.7 defect was missing stylesheet context rather than failed editor initialization.
+- Applied the shared host fix to Email, Local File, and CitiNET Page editors while preserving HTML Source, Enter handling, saved content, and Hexcode Breach Lite v1.2.0 behavior.
+
+## 0.8.0-beta.7 — 2026-09-06
+
+- Kept the CitiNET-styled outer ProseMirror controls—Format, Font, Table, lists, horizontal rule, image, link, clear formatting, and HTML source—including their cyan hover state.
+- Corrected the toolbar selector to target only the topmost `.editor-menu`. Nested Format, Font, and Table command trees no longer inherit the toolbar's forced flex layout, so only Foundry's native dropdown opens from each circled control.
+- Applied the shared fix to Email, Local File, and CitiNET Page editors without changing HTML Source, saved content, or Hexcode Breach Lite v1.2.0 behavior.
+
+## 0.8.0-beta.6 — 2026-09-06
+
+- Reduced the Email, Local File, and CitiNET Page visual editor toolbar to Foundry's compact top-level controls: Format, Font, the Table symbol, and the standard icon buttons.
+- Removed CitiNET's styling from ProseMirror popovers so Format, Font, and Table menus use Foundry's native hidden/open states, layout, and interaction without duplicated command trees.
+- Preserved beta.5's Hexcode Breach Lite v1.2.0 bridge, shared randomized file reveals, portable terminals, Tile unbinding, authoring behavior, and saved data without migration.
+
+## 0.8.0-beta.5 — 2026-09-06
+
+- Fixed Foundry's ProseMirror dropdown trees appearing permanently expanded inside Email, Local File, and CitiNet Page editors. CitiNet now styles only the real top-level toolbar and leaves submenu visibility to Foundry's editor controls.
+- Restyled open ProseMirror popovers as compact, scrollable CitiNet menus without replacing or forking Foundry's editor engine.
+- Updated optional Hexcode Breach Lite compatibility, manifest guidance, runtime version checks, and documentation to stable v1.2.0.
+- Verified CitiNet's Scene/Portable puzzle listing, scoped puzzle launch, Netrunner gate, and explicit `closeHBLPlayerApp` outcome handshake against Hexcode v1.2.0. Full success now also requires a complete, unique `solvedSequenceIds` list, supporting overlapping sequence resolution while failing closed on inconsistent result metadata.
+- Reworked the README into a first-time GitHub guide covering requirements, installation, Quick Start, Tile binding, terminal scopes, authoring, Hexcode locks, Shard exports, trace behavior, upgrades, troubleshooting, and APIs.
+- Preserved beta.4's Enter-key and fail-closed Hexcode/Shard fixes. No terminal data, Tile binding, player unlock, trace, or helper-Macro migration is required.
+
+## 0.8.0-beta.4 — 2026-09-06
+
+- Fixed Enter inside the Visual editor submitting Foundry's Dialog and closing the content editor. ProseMirror now keeps its normal paragraph/line-break behavior while the keystroke is stopped before it reaches the Dialog's default Save action.
+- Removed the legacy live-GM Hexcode bypass. A normal live terminal now requires a current Netrunner Actor and that user's exact verified unlock record, even when the Foundry user is a GM.
+- Centralized the live Hexcode authorization check and made Shard exports validate the freshly loaded terminal item before checking the Memory Chip, preventing either role from exporting unresolved locked content through a stale window or direct action.
+- Kept CitiNet GM Preview session-only, and preserved existing unlock records, Shard DV rules, Memory Chip requirements, trace data, bindings, and content without migration.
+
+## 0.8.0-beta.3 — 2026-09-06
+
+- Added **Unbind Selected Tile** controls to both the Manager and Terminal Editor. Multiple selected Tiles can be unbound at once; Tiles bound to another terminal are left untouched.
+- Added `game.citinetTerminal.unbindSelectedTiles(terminalId)` to the public API.
+- Fixed Visual → HTML Source → Visual switching by rebuilding Foundry's complete editor target shell before remounting, preventing the stale ProseMirror menu from throwing `replaceWith` errors.
+- Added the same Visual / HTML Source editor to Local File bodies, alongside Email and CitiNet Page bodies.
+- Preserved synchronous content saves and the source-only fallback when Foundry's visual editor cannot start.
+
+## 0.8.0-beta.2 — 2026-09-06
+
+- Fixed Email, Local File, and CitiNet Page edits being discarded when their Dialog closed before the asynchronous rich-editor setup callback resumed.
+- Made the content Save callback fully synchronous and independent of visual-editor startup, so HTML Source and File editors always save even when ProseMirror is unavailable.
+- Resolved Foundry v12's lexical `ProseMirrorEditor` global and retained namespaced fallbacks for compatible Foundry builds.
+- Kept HTML Source visibly active and usable when visual editing cannot start, including direct focus from its mode button.
+- Removed the obsolete `{ async: true }` option from Roll evaluation to eliminate the Foundry v12 compatibility warning while preserving shared persistent RollTable results.
+
+## 0.8.0-beta.1 — 2026-09-06
+
+- Changed RollTable-backed Local Files from per-window rerolls to one GM-authoritative shared reveal. The first authorized live open rolls once, persists the selected results in the world database, and shows the same reveal to every player across windows, Scenes, and restarts.
+- Added File Editor controls to stage a new shared roll or clear the reveal so the next live open rolls again. Changing the RollTable snapshot, formula, results, or draw count automatically invalidates an incompatible saved reveal.
+- Kept GM Preview non-destructive: an unrevealed randomized file gets a temporary preview draw without locking the live result.
+- Added Foundry VTT 12 ProseMirror visual editors to Email and CitiNet Page bodies, with a one-click HTML Source mode and a safe source-only fallback if the visual editor is unavailable.
+- Preserved CitiNet's external-navigation wall for content authored through either visual or source mode.
+- Added explicit **Scene-local** and **Portable (World)** terminal storage scopes plus a dedicated **New Portable / Laptop** profile action.
+- Portable terminal Tile flags work from any Scene and remain valid when a bound Tile is copied with its flags. Confirmed Scene ↔ Portable conversion migrates current bindings and removes off-scene bindings when returning to Scene-local scope.
+- Updated terminal binding flags to version 2 with an explicit scope; legacy bindings infer scope from their terminal profile.
+- Updated optional Hexcode Breach Lite compatibility to v1.1.0, including combined Scene/Portable puzzle selection, explicit `{ scope: "world" }` launches, and validation of `puzzleScope` plus Scene ID in the completion handshake.
+- Preserved full-success-only unlocks, universal trace/reset behavior, Memory Chip and Shard rules, Autofixer purchases, Simple Calendar time, and the live-validated preliminary-close hook guard.
+- Carried forward the public Lucide Square Terminal icon and bundled ISC attribution in `THIRD_PARTY_NOTICES.md`.
 
 ## 0.7.6-beta.2 — 2026-08-29
 
