@@ -1,34 +1,58 @@
-# CitiNET-Terminal
-An offline Foundry VTT 12 module for Cyberpunk RED v0.92.1+ that turns scene Tiles into editable computer terminals.
+# CitiNET Terminal
 
-Module creation assisted by AI.
+A fictional network, email, file, and vehicle-shop terminal system for **Foundry VTT v12** and the **Cyberpunk RED Core** system.
 
-## Included in this beta
+CitiNET Terminal lets a GM build fixed computers or portable laptops, author player-facing content, bind terminals to Scene Tiles, protect emails and files with Hexcode Breach Lite, export data to Memory Chips, and run Autofixer vehicle listings without sending players outside Foundry.
 
-- Terminal Home with Inbox, Local Files, CitiNet, and Autofixer sections.
-- GM-authored email, file, image-gallery, and global CitiNet content in a uniform dark interface.
-- Focused, single-page CitiNet entries for quick roleplay information.
-- Clear image pickers and gallery previews.
-- External web navigation is disabled; displayed addresses remain inside the fictional network and cannot open a browser tab.
-- Optional RollTable-backed Local Files with session-stable randomized text and result images.
-- Per-terminal **Cached / Offline** and fictional **Online** CitiNet modes.
-- Terminal date/time display and stored module timestamps use the active Simple Calendar in-world clock. Open terminals refresh when Simple Calendar advances or rewinds; real-world system time is never shown.
-- Individual email/file locks that launch a scene-local Hexcode Breach Lite v1.0.5 puzzle and unlock only after an explicit full-success outcome.
-- Per-user unlocks. One player cracking a file does not unlock it for everyone.
-- Browser-style Home, Back, and Forward navigation.
-- Configurable, persistent per-player trace progress for every role, with Netrunner-only awareness, GM warning/full-trace alerts, and reliable GM reset controls.
-- Per-user email READ/UNREAD state, with a Netrunner-only **Mark Unread** action.
-- Optional public **Export to Shard (Memory Chip)** actions with no check or GM-configured Basic Tech / Electronics/Security Tech DVs. Every Actor, including a Netrunner, must have a usable Memory Chip; Netrunners bypass only the DV.
-- Drag-and-drop Cyberpunk RED Vehicle Items, automatic vehicle cards, immediate eurobuck payment, and delivery to the selected Actor.
-- Scene-only terminal availability, selected-Tile binding, a helper macro creator, and Monk's Active Tiles-friendly arguments.
+> **Stable release v1.0.0.** Existing v0.7.x and v0.8.0 beta terminal data is normalized automatically; no manual content migration is required.
 
-## Setup
+## Requirements
 
-1. Install the `citinet-terminal` folder in Foundry's `Data/modules` directory and enable it.
-2. As GM, select Token Controls and press the terminal icon to open **CitiNet Terminal Manager**.
-3. Create a Computer or Autofixer terminal.
-4. Edit its content, select a Tile, and press **Bind Selected Tile**.
-5. In Monk's Active Tiles, run this script action:
+- Foundry Virtual Tabletop **v12.343**
+- Cyberpunk RED Core **v0.92.1+** (verified through **v0.92.4**)
+- **Recommended:** Simple Calendar **v2.4.17+** for the in-world terminal clock
+- **Recommended:** Monk's Active Tile Triggers for click-to-open terminal Tiles
+- **Optional:** [Hexcode Breach Lite](https://github.com/LtAtasEDO/Hexcode-Breach-Lite) **v1.2.0+** for encrypted emails and files
+
+No compendium packs, hosted services, or external web access are required.
+
+## Quick Start
+
+1. Enable **CitiNET Terminal** in a Cyberpunk RED world.
+2. As GM, open **Token Controls → CitiNET Terminal Manager** using the terminal icon.
+3. Create one of the following:
+   - **New Computer** for a fixed Scene-local terminal.
+   - **New Portable / Laptop** for a terminal that can move between Scenes.
+   - **New Autofixer** for a vehicle-sales terminal.
+4. Press the terminal's **Edit** button and configure its sections, trace settings, emails, files, and vehicles.
+5. Select the Scene Tile or Tiles that should open the terminal and press **Bind Selected Tile**.
+6. In CitiNET Terminal Manager, press **Create/Update Helper Macro** once.
+7. Add the generated `CitiNet Terminal — Open Bound Tile` Macro to a Monk's **Run Macro** action. Leave Monk's **Arguments** blank.
+8. Trigger the Tile as a player.
+
+The helper Macro is universal. The Tile binding decides which terminal opens, so you do not hard-code a terminal ID into each Macro action.
+
+## Terminal Types and Storage Scopes
+
+| Type or scope | Best for | Behavior |
+|---|---|---|
+| **Computer / Scene-local** | Kiosks, office computers, wall terminals | Opens only on its assigned Scene. Moving it removes incompatible off-scene bindings after confirmation. |
+| **Portable / Laptop (World)** | Carried laptops, stolen devices, recurring props | Opens from any Scene. Copy the bound Tile with its flags intact, or bind another Tile to the same profile. |
+| **Autofixer** | Vehicle listings and roleplay dealerships | Includes vehicle browsing, payment, Actor Item delivery, and El Capitán's delivery message. |
+
+Change **Storage Scope** in the Terminal Editor to convert an existing profile. Scene-local → Portable upgrades its matching Tile flags. Portable → Scene-local keeps bindings on the active Scene and removes off-scene bindings.
+
+Use **Unbind Selected Tile** to remove only the current terminal's binding from one or more selected Tiles. Tiles bound to another terminal are left untouched.
+
+## Monk's Active Tile Triggers
+
+Press **Create/Update Helper Macro** in CitiNET Terminal Manager. CitiNET creates or repairs:
+
+`CitiNet Terminal — Open Bound Tile`
+
+Use that Macro in a Monk's **Run Macro** action and leave the Monk's **Arguments** field blank. The helper forwards Monk's Tile, Token, Actor, and action context to CitiNET.
+
+The equivalent script is:
 
 ```js
 return game.citinet({
@@ -39,62 +63,196 @@ return game.citinet({
 });
 ```
 
-Keep the Monk's Active Tiles **Argument** field blank. After updating from v0.7.0, press **Create Helper Macro** once so the existing launcher is regenerated with the complete Tile context.
+## Authoring Content
 
-You may also open a known terminal directly:
+### Emails
 
-```js
-return game.citinet({ terminalId: "YOUR_TERMINAL_ID" });
+Open a terminal's Editor, enable **Inbox**, and add an Email. Configure its sender, recipient, fictional timestamp, image, body, gallery, publication state, trace cost, optional Hexcode lock, and optional Shard export.
+
+Email READ/UNREAD state is stored per player. Opening an email marks it read. A Netrunner may deliberately mark it unread again. GM Preview never changes player read state.
+
+### Local Files
+
+Enable **Local Files** and add a File. Files support the same body, image, gallery, trace, lock, and Shard controls as Emails.
+
+A File may also contain **Shared Randomized File Data**:
+
+1. Drag a world or compendium RollTable into the File Editor.
+2. Choose how many results the shared reveal should contain.
+3. Save the File.
+4. The first authorized live open rolls once through the active GM and stores that reveal for everyone.
+
+Every player then sees the same result across windows, Scenes, and restarts. **Roll New Shared Result** stages a replacement. **Clear Reveal** makes the next authorized live open roll again. GM Preview draws temporarily and never locks the live result.
+
+### CitiNET Pages
+
+Use **New Netpage** in CitiNET Terminal Manager. Netpages are global and may appear on every terminal whose CitiNET section is enabled. Each page has a title, category, directory-card excerpt, primary image, body, gallery, publication state, trace cost, and optional Shard export.
+
+Choose a terminal's connection mode:
+
+- **Cached / Offline:** netpage navigation does not add trace.
+- **Online (Roleplay):** netpage navigation uses the configured trace costs.
+
+Both are simulated in Foundry. CitiNET never contacts the real internet.
+
+### Visual and HTML Editors
+
+Email, Local File, and CitiNET Page bodies open in Foundry's visual ProseMirror editor. CitiNET uses Foundry's complete native `.editor.prosemirror` host, so the compact toolbar and its Format, Font, Table, and icon dropdown behavior match native character-sheet and Journal editors. CitiNET's normal button palette still supplies the yellow controls and cyan hover.
+
+Choose **HTML Source** for direct markup and **Visual** to return without losing the source edits. Enter and Shift+Enter retain their normal editor behavior and do not submit the surrounding window. If Foundry's visual editor cannot start, HTML Source remains available as the safe fallback.
+
+**Ordinary web links are rendered as inert fictional-network text and cannot open an external browser**. Foundry document links and inline rolls remain functional inside Foundry.
+
+## Hexcode Breach Lite Locks
+
+Hexcode Breach Lite **v1.2.0+** is optional. With it active, an Email or Local File can use a puzzle from either:
+
+- the active Scene's puzzle library, or
+- Hexcode's Portable (World) puzzle library.
+
+A live lock requires the current Actor to have the **Netrunner** Role or **Interface** Role Ability. GM status does not bypass a live terminal lock. CitiNET launches the assigned scoped puzzle and validates Hexcode's explicit close result.
+
+Only a verified `success` where every sequence was cracked unlocks the content. CitiNET also verifies that the solved-sequence count and unique sequence-ID list are complete, including v1.2.0 runs where multiple sequences share overlapping hexes. `partial`, `failure`, `aborted`, native Hexcode GM Preview results, mismatched puzzles, mismatched scopes/Scenes, mismatched Actors, and inconsistent result metadata remain locked.
+
+Unlocks are per Foundry user and exact lock revision. Changing the assigned puzzle invalidates older unlocks. A Scene-local lock remains tied to its Scene; a Portable lock can launch from any Scene.
+
+For safe testing, open CitiNET's **GM Preview**, select a Netrunner Token, and run the breach there. A full success unlocks only that preview window and never creates a permanent player unlock or modifies Hexcode rewards.
+
+Hexcode v1.2.0 preserves the companion-module result contract used by CitiNET while adding overlapping-sequence resolution, buffer-aware solvable attempt matrices, and serialized one-time reward settlement inside Hexcode itself.
+
+## Export to Shard
+
+The GM may enable **Export to Shard (Memory Chip)** on an Email, File, or CitiNET Page. The selected Token's Actor is used first, falling back to the user's assigned Character.
+
+Every export—including a Netrunner export—requires a usable `Memory Chip`:
+
+- Gear marked **carried** or **equipped** qualifies.
+- Cyberware installed through an Actor's installed-item list qualifies.
+- Owned-only Gear, uninstalled Cyberware, missing chips, and zero-quantity chips are rejected with a private warning.
+
+The GM may require no check or a manual **Basic Tech** / **Electronics/Security Tech** check at DV 6–29. A Netrunner bypasses a configured DV but never bypasses the physical Memory Chip or an unresolved Hexcode lock.
+
+The attempt and any required DV are posted publicly in a CitiNET-styled chat card. CitiNET does not automate the skill roll.
+
+## Trace Behavior
+
+Trace progress is stored per user and terminal and survives closing or reopening the window. Every role accumulates trace, preventing a player from switching Actors to evade a terminal lockout.
+
+- Netrunners see the trace meter and warnings.
+- Other roles are traced silently and receive a generic connection termination at full trace.
+- Active GMs receive private alerts at the warning threshold and full trace.
+- **Reset Trace Records** advances one GM-owned terminal revision, releasing active and offline players without editing their User documents.
+
+Individual content may add trace on top of the terminal's base navigation cost.
+
+## Simple Calendar Time
+
+CitiNET uses Simple Calendar's active in-world date, time, and configured display format. Open terminal windows refresh when the GM advances or rewinds the calendar.
+
+If Simple Calendar is disabled or still loading, CitiNET displays `CALENDAR OFFLINE`. It never reveals or falls back to the computer's real-world clock. Fictional Email/File timestamp fields remain GM-authored text for historical messages.
+
+## Autofixer Vehicles
+
+Drag Cyberpunk RED Vehicle Items into an Autofixer terminal. CitiNET snapshots their data and displays vehicle cards using CPR fields including `system.speedCombat` and `system.speedNarrative`.
+
+The buyer is the first controlled Token's Actor, falling back to the user's assigned Character. CitiNET verifies Actor ownership and funds, deducts `system.wealth.value`, records the transaction in the CPR wealth ledger, and creates a fresh embedded Vehicle Item. If Item creation fails after payment, CitiNET attempts an automatic refund.
+
+The player-facing receipt confirms that El Capitán from Autofixer will arrange delivery of the new ride.
+
+## Installing from GitHub
+
+Repository: [LtAtasEDO/CitiNET-Terminal](https://github.com/LtAtasEDO/CitiNET-Terminal)
+
+### Foundry manifest install
+
+When the GitHub release includes both `module.json` and `module.zip`, paste this URL into Foundry's **Install Module → Manifest URL** field:
+
+```text
+https://github.com/LtAtasEDO/CitiNET-Terminal/releases/latest/download/module.json
 ```
 
-## Simple Calendar time
+The latest manifest always follows the repository's current stable GitHub release.
 
-CitiNet Terminal uses Simple Calendar's active calendar and configured date/time formats for the footer display. Advancing or rewinding Simple Calendar refreshes every open CitiNet player window automatically. Content authoring fields such as an email's fictional **Date / timestamp** remain GM-authored text so recovered messages can be older than the current calendar date.
+### Manual install
 
-If Simple Calendar is disabled or not ready, CitiNet displays `CALENDAR OFFLINE` and never falls back to the computer's real-world clock. Enable `foundryvtt-simple-calendar` and reopen or advance the calendar to restore the display.
+1. Download `module.zip` from the desired GitHub Release.
+2. Shut Foundry down completely.
+3. Remove the old `Data/modules/citinet-terminal/` folder when upgrading from an older or suspicious install.
+4. Extract the release so the final path is:
 
-## Vehicle purchases
+```text
+FoundryVTT/Data/modules/citinet-terminal/module.json
+```
 
-The buyer is the first controlled Token's Actor, falling back to the user's assigned character. The module validates ownership and funds, deducts `system.wealth.value`, adds the full Vehicle Item to the Actor, and records the transaction in the Cyberpunk RED wealth ledger. The player-facing receipt stays in-world by confirming that El Capitán from Autofixer will arrange delivery of the purchased ride. If Item creation fails after payment, the module attempts an automatic refund.
+5. Start Foundry and enable **CitiNET Terminal** in the world.
 
-## Hexcode locks
+Do not install it one folder too deep. This is wrong:
 
-Hexcode Breach Lite v1.0.5 is optional. With it active, the GM can choose any puzzle from the active scene while editing an email or file. A live player must satisfy Hexcode Breach Lite's Netrunner/Interface-role gate and crack every configured sequence. CitiNet consumes v1.0.5's explicit close outcome and unlocks content only for `success`; `partial`, `failure`, and `aborted` outcomes leave it encrypted. Rewards already secured from individual sequences remain governed by Hexcode Breach Lite.
+```text
+Data/modules/citinet-terminal/citinet-terminal/module.json
+```
 
-CitiNet's GM Preview simulates the player lock: select a Netrunner Token to launch the assigned puzzle. A full success reveals the protected content only for that CitiNet preview window and does not grant a permanent user unlock. Native Hexcode GM Preview outcomes are ignored by CitiNet companion-module unlock logic.
+Because CitiNET declares a package socket for shared RollTable reveals, fully restart Foundry after installing or updating it.
 
-Puzzles are scene-local. Open the terminal editor on the same scene that owns the intended puzzle before assigning the lock.
+## Upgrade Troubleshooting
 
-## Trace behavior
+If Foundry reports the wrong version, an old editor layout remains, a helper Macro behaves differently on the player client, or runtime behavior does not match the release:
 
-Trace progress is stored per user and per terminal, survives closing/reopening the terminal, and advances for every role. Each terminal sets a base navigation cost; individual emails, files, and CitiNet pages can add an extra cost. Actors with the Netrunner Role or Interface Role Ability see the trace meter and receive trace warnings. Other Roles accumulate the same trace silently and receive only a generic connection termination when it fills, preventing role-swapping from bypassing a traced terminal. At the warning threshold and at full trace, active GMs receive a private chat alert. Reset advances a GM-owned terminal revision, immediately invalidating every current and offline player's earlier trace without editing Player User documents.
+1. Fully shut down Foundry.
+2. Confirm no Foundry or Node process remains running.
+3. Delete the entire `Data/modules/citinet-terminal/` folder.
+4. Install a fresh complete release.
+5. Restart Foundry and confirm:
 
-The terminal editor also chooses a CitiNet connection mode:
+```js
+game.modules.get("citinet-terminal")?.version
+```
 
-- **Cached / Offline:** CitiNet directory and netpage navigation add no trace. Other configured sections may still add trace for any role.
-- **Online (Roleplay):** the UI presents a fictional live CitiNet uplink and CitiNet navigation uses the configured trace costs for every role. The module never accesses the real internet.
+Overlaying new files can leave stale JavaScript, CSS, or templates behind. Terminal data is stored in the world and is not deleted with the module folder.
 
-## Content editor fields
+For Hexcode lock problems, also confirm:
 
-- **Card excerpt:** short preview text shown beneath a CitiNet page title in the CitiNet directory.
-- **Primary image:** image above an email, file, or netpage body. Wide banners scale down to the content width; small icon art retains its natural dimensions instead of stretching. A CitiNet page also uses this image as its directory thumbnail; without one, the globe remains.
-- **Gallery images:** extra clickable thumbnails displayed after the body. Use **Add Image** to select each Foundry-hosted image, or enter one path per line.
-- **Body:** HTML and Foundry document references are supported. Ordinary web addresses are rendered as inert simulated-network text and cannot open an external browser.
-- **Randomized File Data:** drag a world or compendium RollTable into a Local File. The module snapshots its results so players do not need RollTable permissions. Text results appear in a generated-data panel and result images join the gallery. The draw remains stable until that terminal window closes.
-- **Export to Shard:** optionally expose an export action. Before any export, the module checks the selected Token's Actor, falling back to the user's assigned character. A `Memory Chip` Gear Item qualifies only when `system.equipped` is `carried` or `equipped`; a `Memory Chip` Cyberware Item qualifies only when its Item ID appears in an installed cyberware list. Merely owned or uninstalled chips produce a private warning telling the player to ready the chip and retry. The GM can require no check or a manual Basic Tech / Electronics/Security Tech check at DV 6–29. The attempt and DV appear in the public chat using the CitiNet interface style. A Netrunner still needs the Memory Chip and bypasses the DV only when a check is configured. Hexcode-locked content must first be breached by a Netrunner before its Shard export is available.
+```js
+game.modules.get("hexcode-breach-lite")?.version
+```
+
+It must report `1.2.0` or newer for this build.
 
 ## Public API
 
 ```js
-game.citinet(args)
-game.citinetTerminal.openManager()
-game.citinetTerminal.openTerminal(terminalId)
-game.citinetTerminal.bindSelectedTiles(terminalId)
-game.citinetTerminal.createHelperMacro()
-game.citinetTerminal.loadDB()
+// Monk's / bound-Tile entry point.
+await game.citinet(context);
+
+// Open the GM Manager.
+game.citinetTerminal.openManager();
+
+// Open a known terminal directly.
+game.citinetTerminal.openTerminal("TERMINAL_ID");
+
+// Bind or unbind selected Tiles.
+await game.citinetTerminal.bindSelectedTiles("TERMINAL_ID");
+await game.citinetTerminal.unbindSelectedTiles("TERMINAL_ID");
+
+// Create or repair the universal helper Macro.
+await game.citinetTerminal.createHelperMacro();
+
+// Read a normalized clone of the world database.
+await game.citinetTerminal.loadDB();
 ```
-## Artwork and icon acknowledgements
 
-The `citinet-terminal.svg` asset uses the human-authored **Square Terminal** geometry from Lucide Icons v1.8.0 via ISC License. The icon was originally contributed by GitHub user `@mittalyashu` through Lucide pull request #181 and was modified with CitiNet color treatment via CSS to give a dark background, with accessibility metadata, and presentation styling. The original Lucide geometry is unchanged.
+## Storage Model
 
-See `THIRD_PARTY_NOTICES.md` for the complete acknowledgement.
+- Terminal profiles, local content, vehicle snapshots, Netpages, trace revisions, and shared randomized reveals: hidden Foundry world setting managed by CitiNET Terminal.
+- Tile bindings: `flags.citinet-terminal.binding`
+- Per-user trace, READ/UNREAD, and Hexcode unlock state: Foundry User flags managed by CitiNET Terminal.
+
+Deleting and reinstalling the module folder does not erase world data. Back up the Foundry world before any major upgrade as normal.
+
+## Credits and Asset Notice
+
+Created by **Lt Atlas** for Cyberpunk RED on Foundry VTT, with development assistance from AI.
+
+The bundled terminal icon uses the human-authored Lucide **Square Terminal** geometry under the ISC License with CitiNET presentation styling (The icon was originally contributed by GitHub user `@mittalyashu` through Lucide pull request #181). Full attribution and the license text are included in `THIRD_PARTY_NOTICES.md`.
+
+This project is unofficial fan tooling and is not affiliated with R. Talsorian Games, Foundry Gaming LLC, or CD PROJEKT RED.
