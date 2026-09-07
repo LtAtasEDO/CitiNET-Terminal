@@ -20,9 +20,14 @@
         </select>
         <small>Cached CitiNet pages do not add CitiNet trace. Online is fictional but traceable for every role.</small>
       </label>
+      <label class="citinet-scope-field">Storage Scope
+        <select name="storageScope">
+          {{#each storageScopeOptions}}<option value="{{value}}" {{#if selected}}selected{{/if}}>{{label}}</option>{{/each}}
+        </select>
+        <small>{{scopeHelp}}</small>
+      </label>
     </div>
     <div class="citinet-check-row">
-      <label><input type="checkbox" name="sceneOnly" {{#if terminal.sceneOnly}}checked{{/if}}> Scene-only access</label>
       <label><input type="checkbox" name="enabled.inbox" {{#if terminal.enabled.inbox}}checked{{/if}}> Inbox</label>
       <label><input type="checkbox" name="enabled.files" {{#if terminal.enabled.files}}checked{{/if}}> Local Files</label>
       <label><input type="checkbox" name="enabled.citinet" {{#if terminal.enabled.citinet}}checked{{/if}}> CitiNet</label>
@@ -83,10 +88,11 @@
   </section>
 
   <footer class="citinet-editor-footer">
-    <div><strong>Scene:</strong> {{sceneLabel}} · <strong>Selected Tile bindings:</strong> {{bindingCount}}</div>
+    <div><strong>Scene:</strong> {{sceneLabel}} · <strong>Tile bindings:</strong> {{bindingCount}}</div>
     <div>
       <button type="button" data-action="preview"><i class="fas fa-eye"></i> Preview</button>
       <button type="button" data-action="bind"><i class="fas fa-link"></i> Bind Selected Tile</button>
+      <button type="button" data-action="unbind"><i class="fas fa-unlink"></i> Unbind Selected Tile</button>
       <button type="submit" class="is-primary"><i class="fas fa-save"></i> Save</button>
       <button type="button" data-action="close"><i class="fas fa-times"></i> Close</button>
     </div>
