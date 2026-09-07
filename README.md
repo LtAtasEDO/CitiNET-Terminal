@@ -4,7 +4,7 @@ A fictional network, email, file, and vehicle-shop terminal system for **Foundry
 
 CitiNET Terminal lets a GM build fixed computers or portable laptops, author player-facing content, bind terminals to Scene Tiles, protect emails and files with Hexcode Breach Lite, export data to Memory Chips, and run Autofixer vehicle listings without sending players outside Foundry.
 
-> **Stable release v1.0.0.** Existing v0.7.x and v0.8.0 beta terminal data is normalized automatically; no manual content migration is required.
+> **Stable release v1.0.1.** Existing v0.7.x, v0.8.0 beta, and v1.0.0 terminal data is normalized automatically; no manual content migration is required.
 
 ## Requirements
 
