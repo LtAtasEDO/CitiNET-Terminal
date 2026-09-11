@@ -1,7 +1,7 @@
 const CT_ID = "citinet-terminal";
-const CT_VERSION = "1.0.1";
+const CT_VERSION = "1.1.0-beta.6";
 const CT_DB_KEY = "db";
-const CT_DB_VERSION = 6;
+const CT_DB_VERSION = 7;
 const CT_SOCKET = `module.${CT_ID}`;
 const CT_BINDING_FLAG = "binding";
 const CT_UNLOCK_FLAG = "unlocks";
@@ -10,8 +10,16 @@ const CT_TRACE_FLAG = "traceStates";
 const CT_HBL_ID = "hexcode-breach-lite";
 const CT_HBL_MIN_VERSION = "1.2.0";
 const CT_SC_ID = "foundryvtt-simple-calendar";
+const CT_SC_MIN_VERSION = "2.4.17";
+const CT_SC_VERIFIED_VERSION = "2.4.18";
+const CT_SC_MAX_VERSION = "2.4.18";
+const CT_MATT_ID = "monks-active-tiles";
+const CT_MATT_MIN_VERSION = "12.01";
+const CT_MATT_VERIFIED_VERSION = "12.02";
+const CT_MATT_MAX_VERSION = "12.02";
 
 let ctCalendarHookBound = false;
+const ctSeenTerminalPushes = new Set();
 
 const ctEsc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -44,6 +52,11 @@ function ctVersionAtLeast(current, minimum) {
   return true;
 }
 
+function ctVersionWithinRange(current, minimum, maximum = null) {
+  if (!ctVersionAtLeast(current, minimum)) return false;
+  return !maximum || ctVersionAtLeast(maximum, current);
+}
+
 function ctHexcodeModule() {
   const module = game.modules?.get(CT_HBL_ID);
   if (!module?.active || !ctVersionAtLeast(module.version, CT_HBL_MIN_VERSION)) return null;
@@ -52,8 +65,22 @@ function ctHexcodeModule() {
 
 function ctSimpleCalendar() {
   const module = game.modules?.get(CT_SC_ID);
-  if (module && !module.active) return null;
+  if (module && (!module.active || !ctVersionWithinRange(module.version, CT_SC_MIN_VERSION, CT_SC_MAX_VERSION))) return null;
   return globalThis.SimpleCalendar?.api ? globalThis.SimpleCalendar : null;
+}
+
+function ctRecommendedModuleStatus(id, minimum, verified, maximum, label) {
+  const module = game.modules?.get(id);
+  const version = String(module?.version || "");
+  if (!module) return { id, label, version: "Not installed", state: "missing", stateLabel: "OPTIONAL // NOT INSTALLED" };
+  if (!ctVersionAtLeast(version, minimum)) {
+    return { id, label, version: `v${version || "unknown"}`, state: "update", stateLabel: `UPDATE RECOMMENDED // ${minimum}+` };
+  }
+  if (maximum && !ctVersionAtLeast(maximum, version)) {
+    return { id, label, version: `v${version}`, state: "unsupported", stateLabel: `UNSUPPORTED // MAX ${maximum}` };
+  }
+  if (!module.active) return { id, label, version: `v${version}`, state: "inactive", stateLabel: "INSTALLED // INACTIVE" };
+  return { id, label, version: `v${version}`, state: "ready", stateLabel: `READY // VERIFIED ${verified}` };
 }
 
 function ctCalendarDateTime() {
@@ -103,7 +130,7 @@ function ctDefaultTrace() {
   return { enabled: false, max: 100, baseCost: 5, warnAt: 60, lockOnFull: true, revision: 1 };
 }
 
-function ctDefaultNetpage() {
+function ctDefaultNetpage(now = ctNow()) {
   return {
     id: "welcome",
     title: "CitiNet Local Gateway",
@@ -115,8 +142,8 @@ function ctDefaultNetpage() {
     shardExport: ctDefaultShardExport(),
     traceCost: 0,
     published: true,
-    createdAt: ctNow(),
-    updatedAt: ctNow()
+    createdAt: now,
+    updatedAt: now
   };
 }
 
@@ -126,6 +153,61 @@ function ctDefaultShardExport() {
 
 function ctEmptyRandomTable() {
   return { uuid: "", name: "", formula: "1d20", drawCount: 1, results: [], sharedDraw: null };
+}
+
+function ctEmptyNetArchitecture() {
+  return { uuid: "", name: "", img: "", type: "", floorCount: 0, snapshot: null };
+}
+
+function ctDefaultSecuritySystem() {
+  return { enabled: false, title: "", description: "", status: "online", netArchitecture: ctEmptyNetArchitecture() };
+}
+
+function ctNormalizeNetArchitecture(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const source = raw.snapshot && typeof raw.snapshot === "object" && String(raw.snapshot.type || "").toLowerCase() === "netarch"
+    ? raw.snapshot
+    : null;
+  const snapshot = source ? {
+    name: String(source.name || raw.name || "NET Architecture"),
+    type: "netarch",
+    img: String(source.img || raw.img || "systems/cyberpunk-red-core/icons/compendium/default/Default_Net_Architecture.svg"),
+    system: source.system && typeof source.system === "object" ? ctClone(source.system) : {},
+    effects: Array.isArray(source.effects) ? ctClone(source.effects) : [],
+    flags: source.flags && typeof source.flags === "object" ? ctClone(source.flags) : {}
+  } : null;
+  const floors = Array.isArray(snapshot?.system?.floors) ? snapshot.system.floors : [];
+  return {
+    uuid: snapshot ? String(raw.uuid || "") : "",
+    name: snapshot ? String(raw.name || snapshot.name || "NET Architecture") : "",
+    img: snapshot ? String(raw.img || snapshot.img || "") : "",
+    type: snapshot ? "netarch" : "",
+    floorCount: snapshot ? floors.length : 0,
+    snapshot
+  };
+}
+
+function ctNormalizeSecuritySystem(value) {
+  const raw = value && typeof value === "object" ? value : {};
+  const status = ["online", "compromised", "offline"].includes(raw.status) ? raw.status : "online";
+  return {
+    enabled: Boolean(raw.enabled),
+    title: String(raw.title || ""),
+    description: String(raw.description || ""),
+    status,
+    netArchitecture: ctNormalizeNetArchitecture(raw.netArchitecture)
+  };
+}
+
+function ctSnapshotNetArchitecture(item) {
+  if (item?.documentName !== "Item" || String(item.type || "").toLowerCase() !== "netarch") return null;
+  const raw = item.toObject?.() || item;
+  return ctNormalizeNetArchitecture({
+    uuid: item.uuid || raw.uuid || "",
+    name: item.name || raw.name || "NET Architecture",
+    img: item.img || raw.img || "",
+    snapshot: raw
+  });
 }
 
 function ctStorageScope(value, legacySceneOnly = true) {
@@ -159,8 +241,8 @@ function ctNewTerminal(type = "computer", name = "New Terminal", storageScope = 
   };
 }
 
-function ctDefaultDB() {
-  const welcome = ctDefaultNetpage();
+function ctDefaultDB(now = ctNow()) {
+  const welcome = ctDefaultNetpage(now);
   return { _ver: CT_DB_VERSION, terminals: {}, netpages: { [welcome.id]: welcome }, netpageOrder: [welcome.id] };
 }
 
@@ -263,7 +345,8 @@ function ctNormalizeContent(raw = {}, kind = "file") {
     title: String(raw.title || "New File"),
     fileType: String(raw.fileType || "DATA"),
     date: String(raw.date || ""),
-    body: String(raw.body || "")
+    body: String(raw.body || ""),
+    securitySystem: ctNormalizeSecuritySystem(raw.securitySystem)
   };
 }
 
@@ -342,7 +425,9 @@ function ctRegisterSettings() {
     scope: "world",
     config: false,
     type: Object,
-    default: ctDefaultDB()
+    // Settings register during Foundry's init hook, before Simple Calendar has
+    // loaded an active calendar. Use a neutral timestamp for this static default.
+    default: ctDefaultDB(0)
   });
 }
 
@@ -360,8 +445,33 @@ async function ctSaveDB(db, { terminalId = null, refresh = true } = {}) {
   return saved;
 }
 
+function ctAssignedActor(user = game.user) {
+  const currentUser = game.users?.get?.(user?.id) ?? user;
+  const assigned = currentUser?.character ?? null;
+  if (typeof assigned !== "string") return assigned;
+  return game.actors?.get?.(assigned) ?? null;
+}
+
+function ctControlledActor() {
+  return canvas?.tokens?.controlled?.[0]?.actor ?? null;
+}
+
+function ctGetActorContext() {
+  const assigned = ctAssignedActor();
+  const controlled = ctControlledActor();
+  // A player's assigned Character is the account's authoritative terminal
+  // operator. This prevents a previously controlled Token from silently
+  // retaining another Actor's Role after the assignment changes. GMs keep
+  // selected-Token priority so GM Preview can deliberately simulate an Actor.
+  const useControlled = Boolean(game.user?.isGM ? controlled : (!assigned && controlled));
+  const actor = useControlled ? controlled : (assigned ?? controlled ?? null);
+  const source = useControlled ? "token" : (assigned ? "character" : "none");
+  const actorKey = String(actor?.uuid || actor?.id || "none");
+  return { actor, source, key: `${source}:${actorKey}` };
+}
+
 function ctGetActor() {
-  return canvas?.tokens?.controlled?.[0]?.actor ?? game.user?.character ?? null;
+  return ctGetActorContext().actor;
 }
 
 function ctIsNetrunner(actor) {
@@ -841,6 +951,8 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
   const isFile = kind === "file";
   const isNetpage = kind === "netpage";
   let randomTable = ctNormalizeRandomTable(item.randomTable || ctEmptyRandomTable());
+  let netArchitecture = ctNormalizeNetArchitecture(item.securitySystem?.netArchitecture);
+  const securitySystem = ctNormalizeSecuritySystem(item.securitySystem);
   const shardExport = ctNormalizeShardExport(item.shardExport);
   const installedHbl = game.modules.get(CT_HBL_ID);
   const hblReady = Boolean(ctHexcodeModule());
@@ -897,6 +1009,23 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
     </div>
     <div class="citinet-dialog-help">Reroll/Clear changes take effect when you press Save. GM Preview uses a temporary draw and never locks the live result.</div>
   </section>` : "";
+  const securitySystemField = isFile ? `<section class="citinet-dialog-section citinet-wide citinet-security-editor" data-security-editor>
+    <div class="citinet-dialog-section-head"><div><strong>Security System</strong><span>Optional player-facing security profile. The File's Hexcode lock protects this description and its NET Architecture preview. Status is shared and changed only by the GM.</span></div></div>
+    <label class="citinet-inline-check"><input type="checkbox" name="securityEnabled" data-security-enabled ${securitySystem.enabled ? "checked" : ""}> Enable Security System panel</label>
+    <div class="citinet-security-fields" data-security-fields ${securitySystem.enabled ? "" : "hidden"}>
+      <div class="citinet-security-grid">
+        <label>Security title<input name="securityTitle" value="${ctEsc(securitySystem.title)}" placeholder="Building Security Grid"></label>
+        <label>Shared status<select name="securityStatus"><option value="online" ${securitySystem.status === "online" ? "selected" : ""}>ONLINE</option><option value="compromised" ${securitySystem.status === "compromised" ? "selected" : ""}>COMPROMISED</option><option value="offline" ${securitySystem.status === "offline" ? "selected" : ""}>OFFLINE</option></select></label>
+      </div>
+      <label>Player-facing description<textarea name="securityDescription" rows="4" placeholder="Four lobby cameras, two elevator cameras, and one rooftop turret.">${ctEsc(securitySystem.description)}</textarea></label>
+      <div class="citinet-netarch-drop ${netArchitecture.snapshot ? "has-netarch" : ""}" data-netarch-drop>
+        <img data-netarch-image src="${ctEsc(netArchitecture.img || "systems/cyberpunk-red-core/icons/compendium/default/Default_Net_Architecture.svg")}" alt="NET Architecture">
+        <div><strong data-netarch-name>${ctEsc(netArchitecture.name || "Drop CPR NET Architecture Here")}</strong><small data-netarch-status>${netArchitecture.snapshot ? `${netArchitecture.floorCount} floor${netArchitecture.floorCount === 1 ? "" : "s"} snapshotted // native CPR Item` : "Drop an Item with CPR type netarch from a Character, world Items, or a compendium."}</small></div>
+        <button type="button" data-remove-netarch ${netArchitecture.snapshot ? "" : "hidden"}><i class="fas fa-trash"></i> Remove</button>
+      </div>
+      <div class="citinet-dialog-help">The preview is a temporary read-only copy. CitiNET does not run the Architecture, discover devices, change Tiles, or alter this status after a breach.</div>
+    </div>
+  </section>` : "";
   const shardExportField = `<section class="citinet-dialog-section citinet-wide citinet-shard-editor">
     <div class="citinet-dialog-section-head"><div><strong>Export to Shard (Memory Chip)</strong><span>Optional player action. Every Actor needs a carried/equipped Memory Chip or installed Memory Chip cyberware. Netrunners bypass only the configured DV; everyone else rolls manually and the required skill and DV are posted to chat.</span></div></div>
     <div class="citinet-shard-grid">
@@ -922,6 +1051,7 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
       <input name="image" value="${ctEsc(item.image)}" placeholder="icons/... or modules/...">
     </section>
     ${bodyField}
+    ${securitySystemField}
     ${randomTableField}
     <section class="citinet-dialog-section citinet-wide">
       <div class="citinet-dialog-section-head"><div><strong>Gallery Images</strong><span>Additional clickable thumbnails shown after the body. Add one Foundry image path per line.</span></div><div><button type="button" data-add-gallery-image><i class="fas fa-plus"></i> Add Image</button><button type="button" data-clear-gallery><i class="fas fa-eraser"></i> Clear</button></div></div>
@@ -967,6 +1097,13 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
                 dv: fd.get("shardExportDV")
               },
               randomTable: isFile ? { ...randomTable, drawCount: fd.get("randomTableDrawCount") } : ctEmptyRandomTable(),
+              securitySystem: isFile ? {
+                enabled: fd.has("securityEnabled"),
+                title: fd.get("securityTitle"),
+                description: fd.get("securityDescription"),
+                status: fd.get("securityStatus"),
+                netArchitecture
+              } : ctDefaultSecuritySystem(),
               traceCost: fd.get("traceCost"), published: fd.has("published"),
               lockPuzzleId: selectedPuzzle?.id || "", lockPuzzleName: selectedPuzzle?.name || "", lockPuzzleScope: selectedPuzzle?.scope || "scene", lockSceneId: selectedPuzzle?.sceneId || "",
               lockRevision: previousLock === (selectedPuzzle?.selectionKey || "") ? item.lockRevision : item.lockRevision + 1,
@@ -1022,6 +1159,43 @@ async function ctContentEditor(kind, source, puzzleOptions = []) {
         const refreshShardFields = () => { if (shardFields) shardFields.hidden = !shardRequires?.checked; };
         shardRequires?.addEventListener("change", refreshShardFields);
         refreshShardFields();
+        const securityEnabled = form?.querySelector?.("[data-security-enabled]");
+        const securityFields = form?.querySelector?.("[data-security-fields]");
+        const refreshSecurityFields = () => { if (securityFields) securityFields.hidden = !securityEnabled?.checked; };
+        securityEnabled?.addEventListener("change", refreshSecurityFields);
+        refreshSecurityFields();
+        const netarchDrop = form?.querySelector?.("[data-netarch-drop]");
+        const refreshNetArchitecture = () => {
+          if (!netarchDrop) return;
+          netarchDrop.classList.toggle("has-netarch", Boolean(netArchitecture.snapshot));
+          const image = netarchDrop.querySelector("[data-netarch-image]");
+          const name = netarchDrop.querySelector("[data-netarch-name]");
+          const status = netarchDrop.querySelector("[data-netarch-status]");
+          const remove = netarchDrop.querySelector("[data-remove-netarch]");
+          if (image) image.src = netArchitecture.img || "systems/cyberpunk-red-core/icons/compendium/default/Default_Net_Architecture.svg";
+          if (name) name.textContent = netArchitecture.name || "Drop CPR NET Architecture Here";
+          if (status) status.textContent = netArchitecture.snapshot
+            ? `${netArchitecture.floorCount} floor${netArchitecture.floorCount === 1 ? "" : "s"} snapshotted // native CPR Item`
+            : "Drop an Item with CPR type netarch from a Character, world Items, or a compendium.";
+          if (remove) remove.hidden = !netArchitecture.snapshot;
+        };
+        netarchDrop?.addEventListener("dragover", event => { event.preventDefault(); netarchDrop.classList.add("is-drag"); });
+        netarchDrop?.addEventListener("dragleave", event => { event.preventDefault(); netarchDrop.classList.remove("is-drag"); });
+        netarchDrop?.addEventListener("drop", async event => {
+          event.preventDefault();
+          netarchDrop.classList.remove("is-drag");
+          const droppedItem = await ctResolveDroppedDocument(event, "Item");
+          const snapshot = ctSnapshotNetArchitecture(droppedItem);
+          if (!snapshot) return ui.notifications.warn("Drop a Cyberpunk RED NET Architecture Item (type: netarch) here.");
+          netArchitecture = snapshot;
+          refreshNetArchitecture();
+          ui.notifications.info(`Attached NET Architecture ${snapshot.name}.`);
+        });
+        netarchDrop?.querySelector?.("[data-remove-netarch]")?.addEventListener("click", event => {
+          event.preventDefault();
+          netArchitecture = ctEmptyNetArchitecture();
+          refreshNetArchitecture();
+        });
         const tableDrop = form?.querySelector?.("[data-rolltable-drop]");
         const refreshTable = () => {
           if (!tableDrop) return;
@@ -1111,10 +1285,16 @@ class CitiNetManagerApp extends Application {
       vehicleCount: terminal.vehicles.length
     }));
     const netpages = db.netpageOrder.map(id => db.netpages[id]).filter(Boolean);
+    const integrations = [
+      ctRecommendedModuleStatus(CT_MATT_ID, CT_MATT_MIN_VERSION, CT_MATT_VERIFIED_VERSION, CT_MATT_MAX_VERSION, "Monk's Active Tile Triggers"),
+      ctRecommendedModuleStatus(CT_SC_ID, CT_SC_MIN_VERSION, CT_SC_VERIFIED_VERSION, CT_SC_MAX_VERSION, "Simple Calendar"),
+      ctRecommendedModuleStatus(CT_HBL_ID, CT_HBL_MIN_VERSION, CT_HBL_MIN_VERSION, null, "Hexcode Breach Lite")
+    ];
     return {
       terminals,
       terminalCount: terminals.length,
       netpages,
+      integrations,
       helperCommand: `return game.citinet({
   args: typeof args === "undefined" ? null : args,
   tile: typeof tile === "undefined" ? null : tile,
@@ -1161,6 +1341,7 @@ class CitiNetManagerApp extends Application {
     }
     if (action === "edit") return ctOpenEditor(terminalId);
     if (action === "preview") return ctOpenTerminal(terminalId, { gmPreview: true });
+    if (action === "push") return ctPushTerminal(terminalId);
     if (action === "bind") { await ctBindSelectedTiles(terminalId); return this.render(false); }
     if (action === "unbind") { await ctUnbindSelectedTiles(terminalId); return this.render(false); }
     if (action === "reset-trace") { await ctResetTrace(terminalId); return this.render(false); }
@@ -1200,6 +1381,7 @@ class CitiNetManagerApp extends Application {
       return this.render(false);
     }
     if (action === "create-macro") return ctCreateHelperMacro();
+    if (action === "create-push-macro") return ctCreatePushMacro();
   }
 }
 
@@ -1455,6 +1637,7 @@ class CitiNetTerminalEditorApp extends FormApplication {
 }
 
 const ctPlayerApps = new Map();
+const ctPlayerAppInstances = new Set();
 const ctPendingBreaches = new WeakMap();
 const ctPendingRandomReveals = new Map();
 const ctRandomRevealLocks = new Map();
@@ -1766,6 +1949,38 @@ function ctGalleryHtml(item, extraGallery = []) {
   return images.length ? `<div class="citinet-gallery">${images.map(src => `<img src="${ctEsc(src)}" data-image-src="${ctEsc(src)}" alt="Gallery image">`).join("")}</div>` : "";
 }
 
+function ctSecuritySystemHtml(item) {
+  const security = ctNormalizeSecuritySystem(item?.securitySystem);
+  if (!security.enabled) return "";
+  const netarch = security.netArchitecture;
+  const statusLabel = security.status.toUpperCase();
+  const description = ctEsc(security.description).replaceAll("\n", "<br>");
+  const preview = netarch.snapshot ? `<button type="button" class="citinet-netarch-preview" data-action="preview-netarch" data-id="${ctEsc(item.id)}"><img src="${ctEsc(netarch.img)}" alt="${ctEsc(netarch.name)}"><span><b>${ctEsc(netarch.name)}</b><small>${netarch.floorCount} floor${netarch.floorCount === 1 ? "" : "s"} // read-only CPR preview</small></span><i class="fas fa-up-right-from-square"></i></button>` : `<div class="citinet-netarch-empty"><i class="fas fa-diagram-project"></i><span>NO NET ARCHITECTURE ATTACHED</span></div>`;
+  return `<section class="citinet-security-system is-${security.status}"><header><div><span class="citinet-security-light" aria-hidden="true"></span><strong>${ctEsc(security.title || "SECURITY SYSTEM")}</strong></div><b>${statusLabel}</b></header>${description ? `<p>${description}</p>` : ""}${preview}<footer>CitiNET provides intelligence and a preview only. The table handles the NET Architecture and physical consequences.</footer></section>`;
+}
+
+async function ctCreateNetArchitecturePreview(attachment) {
+  const netarch = ctNormalizeNetArchitecture(attachment);
+  if (!netarch.snapshot) return null;
+  const ItemClass = globalThis.CONFIG?.Item?.documentClass;
+  if (typeof ItemClass !== "function") throw new Error("The Cyberpunk RED Item document class is unavailable.");
+  const viewerId = game.user?.id;
+  if (!viewerId) throw new Error("The current Foundry user is unavailable for the NET Architecture preview.");
+  const ownershipLevels = globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS;
+  const previewData = ctClone(netarch.snapshot);
+  previewData._id ||= foundry.utils.randomID(16);
+  previewData.ownership = {
+    default: ownershipLevels?.NONE ?? 0,
+    [viewerId]: ownershipLevels?.OWNER ?? 3
+  };
+  const preview = new ItemClass(previewData, { parent: null });
+  const sheet = preview?.sheet;
+  if (!sheet) throw new Error("The Cyberpunk RED NET Architecture sheet is unavailable.");
+  sheet.options.editable = false;
+  sheet.render(true, { editable: false });
+  return sheet;
+}
+
 function ctWeightedResult(results) {
   const total = results.reduce((sum, result) => sum + Math.max(1, ctNum(result.weight, 1)), 0);
   let pick = Math.random() * Math.max(1, total);
@@ -1866,10 +2081,13 @@ class CitiNetPlayerApp extends Application {
     this.previewRandomDraws = new Map();
     this.randomRevealRequests = new Map();
     this.previewUnlocks = new Set();
+    this.netArchitecturePreviews = new Set();
     this.trace = null;
     this.actor = null;
     this.isNetrunner = false;
     this.traceAware = false;
+    this.actorContextKey = "";
+    ctPlayerAppInstances.add(this);
   }
 
   static get defaultOptions() {
@@ -1887,9 +2105,7 @@ class CitiNetPlayerApp extends Application {
     this.db = await ctLoadDB();
     this.terminal = this.db.terminals[this.terminalId];
     if (!this.terminal) return { missing: true, bodyHtml: ctPageTitle("ERROR", "Terminal not found") };
-    this.actor = ctGetActor();
-    this.isNetrunner = ctIsNetrunner(this.actor);
-    this.traceAware = this.gmPreview || this.isNetrunner;
+    this._syncActorContext();
     if (!this.history.length) {
       const startView = this._allowedStartView(this.terminal.startView);
       this.history = [{ view: startView, id: null }];
@@ -1942,6 +2158,23 @@ class CitiNetPlayerApp extends Application {
     return "home";
   }
 
+  _syncActorContext() {
+    const context = ctGetActorContext();
+    this.actor = context.actor;
+    this.actorContextKey = context.key;
+    this.isNetrunner = ctIsNetrunner(this.actor);
+    this.traceAware = this.gmPreview || this.isNetrunner;
+    return context;
+  }
+
+  refreshActorContext({ force = false } = {}) {
+    const previousKey = this.actorContextKey;
+    const context = this._syncActorContext();
+    if (!this.rendered || (!force && context.key === previousKey)) return false;
+    this.render(false);
+    return true;
+  }
+
   _route(state) {
     if (!state?.id) return state?.view || "home";
     return `${state.view}/${state.id}`;
@@ -1957,16 +2190,13 @@ class CitiNetPlayerApp extends Application {
   _isContentUnlocked(kind, item) {
     if (!item?.lockPuzzleId) return true;
     if (this.gmPreview) return this.previewUnlocks.has(ctUnlockKey(this.terminal, kind, item));
-    this.actor = ctGetActor();
-    this.isNetrunner = ctIsNetrunner(this.actor);
+    this._syncActorContext();
     return ctHasVerifiedContentUnlock(this.actor, this.terminal, kind, item);
   }
 
   _hasLiveTrace() {
     if (this.gmPreview || !this.terminal?.trace?.enabled) return false;
-    this.actor = ctGetActor();
-    this.isNetrunner = ctIsNetrunner(this.actor);
-    this.traceAware = this.isNetrunner;
+    this._syncActorContext();
     return true;
   }
 
@@ -2057,7 +2287,7 @@ class CitiNetPlayerApp extends Application {
           html: `<section class="citinet-random-data is-pending"><header><i class="fas fa-clock"></i><span>SHARED REVEAL // WAITING FOR GM AUTHORITY</span></header><div class="citinet-random-result">The RollTable result has not been locked yet. Reopen this file while a GM is connected.</div></section>`,
           images: []
         } : { html: "", images: [] });
-    return `<article class="citinet-article">${ctPageTitle(item.fileType, item.title, item.date)}${ctHeroHtml(item)}<div class="citinet-richtext">${await ctEnrich(item.body)}</div>${random.html}${ctGalleryHtml(item, random.images)}${ctShardExportHtml(item, "file", this.isNetrunner)}</article>`;
+    return `<article class="citinet-article">${ctPageTitle(item.fileType, item.title, item.date)}${ctHeroHtml(item)}<div class="citinet-richtext">${await ctEnrich(item.body)}</div>${ctSecuritySystemHtml(item)}${random.html}${ctGalleryHtml(item, random.images)}${ctShardExportHtml(item, "file", this.isNetrunner)}</article>`;
   }
 
   _citinetHtml() {
@@ -2119,7 +2349,29 @@ class CitiNetPlayerApp extends Application {
     if (action === "breach") return ctStartBreach(this, event.currentTarget.dataset.kind, event.currentTarget.dataset.id);
     if (action === "mark-unread") return this.markEmailUnread(event.currentTarget.dataset.id);
     if (action === "export-shard") return this.exportToShard(event.currentTarget.dataset.kind, event.currentTarget.dataset.id);
+    if (action === "preview-netarch") return this.previewNetArchitecture(event.currentTarget.dataset.id);
     if (action === "purchase") return this.purchaseVehicle(event.currentTarget.dataset.id, event.currentTarget);
+  }
+
+  async previewNetArchitecture(fileId) {
+    const latestDb = await ctLoadDB();
+    const terminal = latestDb.terminals[this.terminalId];
+    const file = terminal?.files?.find(entry => entry.id === fileId && (entry.published || game.user.isGM));
+    const unlocked = file && (!file.lockPuzzleId || (this.gmPreview
+      ? this.previewUnlocks.has(ctUnlockKey(terminal, "file", file))
+      : ctHasVerifiedContentUnlock(ctGetActor(), terminal, "file", file)));
+    if (!file || !unlocked) return ui.notifications.warn("Unlock this File before previewing its NET Architecture.");
+    const security = ctNormalizeSecuritySystem(file.securitySystem);
+    if (!security.enabled || !security.netArchitecture.snapshot) return ui.notifications.warn("This File has no NET Architecture preview.");
+    try {
+      const sheet = await ctCreateNetArchitecturePreview(security.netArchitecture);
+      if (!sheet) return ui.notifications.warn("This File has no NET Architecture preview.");
+      this.netArchitecturePreviews.add(sheet);
+      return sheet;
+    } catch (error) {
+      console.error(`${CT_ID} | NET Architecture preview failed`, error);
+      return ui.notifications.error("The NET Architecture preview could not be opened. Check the console for details.");
+    }
   }
 
   async navigate(view, id = null) {
@@ -2270,7 +2522,10 @@ class CitiNetPlayerApp extends Application {
   }
 
   async close(options) {
+    for (const sheet of this.netArchitecturePreviews) sheet?.close?.();
+    this.netArchitecturePreviews.clear();
     const result = await super.close(options);
+    ctPlayerAppInstances.delete(this);
     if (ctPlayerApps.get(this.terminalId) === this) ctPlayerApps.delete(this.terminalId);
     return result;
   }
@@ -2336,6 +2591,167 @@ async function ctOpenTerminal(terminalId, options = {}) {
   const app = new CitiNetPlayerApp(terminalId, options);
   if (!options.forceNew) ctPlayerApps.set(terminalId, app);
   return app.render(true);
+}
+
+function ctAllUsers() {
+  const users = game.users?.contents || Array.from(game.users || []);
+  const current = game.user;
+  const unique = new Map(users.filter(Boolean).map(user => [String(user.id || ""), user]));
+  if (current?.id && !unique.has(String(current.id))) unique.set(String(current.id), current);
+  return Array.from(unique.values());
+}
+
+function ctFindUser(userId) {
+  return game.users?.get?.(userId) || ctAllUsers().find(user => String(user.id) === String(userId)) || null;
+}
+
+function ctUserOwnsActor(user, actor) {
+  if (!user?.id || !actor) return false;
+  const owner = globalThis.CONST?.DOCUMENT_OWNERSHIP_LEVELS?.OWNER ?? 3;
+  try {
+    if (typeof actor.testUserPermission === "function") return Boolean(actor.testUserPermission(user, owner));
+  } catch (_error) { /* fall back to the ownership map below */ }
+  const ownership = actor.ownership || actor.permission || {};
+  const level = ownership[user.id] ?? ownership.default ?? 0;
+  return ctNum(level, 0) >= owner;
+}
+
+function ctOnlinePlayerTargets() {
+  const tokens = ctScene()?.tokens?.contents || Array.from(ctScene()?.tokens || []);
+  return ctAllUsers()
+    .filter(user => user?.active && !user.isGM)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+    .map(user => {
+      const assigned = typeof user.character === "string" ? game.actors?.get?.(user.character) : user.character;
+      const actors = new Map();
+      for (const token of tokens) {
+        const actor = token?.actor || token?.document?.actor;
+        if (!actor || !ctUserOwnsActor(user, actor)) continue;
+        const key = String(actor.uuid || actor.id || actor.name || "");
+        if (key) actors.set(key, actor);
+      }
+      const assignedName = String(assigned?.name || "").trim();
+      const sceneActorNames = Array.from(actors.values())
+        .map(actor => String(actor.name || "").trim())
+        .filter(name => name && name !== assignedName)
+        .sort((a, b) => a.localeCompare(b));
+      const context = [
+        assignedName ? `Character: ${assignedName}` : "",
+        sceneActorNames.length ? `Scene Actors: ${sceneActorNames.join(", ")}` : ""
+      ].filter(Boolean).join(" · ") || "No assigned Character or owned Scene Token";
+      return {
+        id: String(user.id),
+        name: String(user.name || "Player"),
+        assignedCharacterName: assignedName,
+        sceneActorNames,
+        contextLabel: context,
+        optionLabel: String(user.name || "Player").length > 48 ? `${String(user.name || "Player").slice(0, 47)}…` : String(user.name || "Player")
+      };
+    });
+}
+
+function ctPushTargetDetails(target) {
+  if (!target) return "";
+  const assigned = target.assignedCharacterName || "None assigned";
+  const sceneActorNames = Array.isArray(target.sceneActorNames) ? target.sceneActorNames : [];
+  const sceneActors = sceneActorNames.length ? sceneActorNames.join(", ") : "No owned Actors on the active Scene";
+  return `<div><span>Player Account</span><strong>${ctEsc(target.name)}</strong></div>
+    <div><span>Assigned Character</span><strong>${ctEsc(assigned)}</strong></div>
+    <div><span>Owned Scene Actors</span><strong>${ctEsc(sceneActors)}</strong></div>`;
+}
+
+async function ctPromptTerminalPush(terminalId = null) {
+  if (!game.user.isGM) return ui.notifications.warn("Only the GM can push a CitiNet terminal to a player.");
+  const db = await ctLoadDB();
+  const terminals = Object.values(db.terminals).sort((a, b) => a.name.localeCompare(b.name));
+  const fixedTerminal = terminalId ? db.terminals[terminalId] : null;
+  if (terminalId && !fixedTerminal) return ui.notifications.warn(`CitiNet terminal not found: ${terminalId}`);
+  if (!fixedTerminal && !terminals.length) return ui.notifications.warn("Create a CitiNet terminal before using the push launcher.");
+  const targets = ctOnlinePlayerTargets();
+  if (!targets.length) return ui.notifications.warn("No non-GM players are online.");
+  const terminalField = fixedTerminal
+    ? `<div class="citinet-push-terminal"><span>Terminal</span><strong>${ctEsc(fixedTerminal.name)}</strong></div>`
+    : `<label>Terminal<select name="terminalId">${terminals.map(terminal => `<option value="${ctEsc(terminal.id)}">${ctEsc(terminal.name)}</option>`).join("")}</select></label>`;
+  const targetOptions = targets.map(target => `<option value="${ctEsc(target.id)}">${ctEsc(target.optionLabel)}</option>`).join("");
+  const firstTarget = targets[0];
+  return new Promise(resolve => {
+    let settled = false;
+    const finish = value => { if (!settled) { settled = true; resolve(value); } };
+    const dialog = new Dialog({
+      title: fixedTerminal ? `Push ${fixedTerminal.name}` : "Push CitiNet Terminal",
+      content: `<form class="citinet-dialog citinet-push-dialog">
+        ${terminalField}
+        <label>Online Player<select name="userId">${targetOptions}</select></label>
+        <div class="citinet-push-context" data-push-context>${ctPushTargetDetails(firstTarget)}</div>
+        <p class="citinet-dialog-help">One connected player receives this terminal. The selected account's Character and owned active-Scene Actors are shown above. Scene scope, content permissions, and Hexcode locks are checked again on their client.</p>
+      </form>`,
+      buttons: {
+        push: {
+          label: "Push Terminal",
+          icon: '<i class="fas fa-paper-plane"></i>',
+          callback: html => {
+            const data = new FormData(ctFormRoot(html));
+            finish({ terminalId: fixedTerminal?.id || String(data.get("terminalId") || ""), userId: String(data.get("userId") || "") });
+          }
+        },
+        cancel: { label: "Cancel", callback: () => finish(null) }
+      },
+      default: "push",
+      render: html => {
+        ctDialogClass(dialog, html, "citinet-push-dialog-host");
+        const form = ctFormRoot(html);
+        const select = form?.querySelector?.("[name='userId']");
+        const context = form?.querySelector?.("[data-push-context]");
+        select?.addEventListener?.("change", () => {
+          const target = targets.find(entry => entry.id === String(select.value || ""));
+          if (context) context.innerHTML = ctPushTargetDetails(target);
+        });
+      },
+      close: () => finish(null)
+    }, { width: 590 });
+    dialog.render(true);
+  });
+}
+
+async function ctSendTerminalPush(terminalId, userId) {
+  if (!game.user.isGM) return ui.notifications.warn("Only the GM can push a CitiNet terminal to a player.");
+  const db = await ctLoadDB();
+  const terminal = db.terminals[terminalId];
+  if (!terminal) return ui.notifications.warn(`CitiNet terminal not found: ${terminalId}`);
+  const target = ctOnlinePlayerTargets().find(entry => entry.id === String(userId));
+  if (!target) return ui.notifications.warn("That player is no longer online.");
+  const message = {
+    op: "push-terminal",
+    terminalId: terminal.id,
+    targetUserId: target.id,
+    senderId: String(game.user.id),
+    pushId: ctId()
+  };
+  game.socket.emit(CT_SOCKET, message);
+  ui.notifications.info(`${terminal.name} pushed to ${target.name}.`);
+  return message;
+}
+
+async function ctPushTerminal(terminalId = null, userId = null) {
+  if (!game.user.isGM) return ui.notifications.warn("Only the GM can push a CitiNet terminal to a player.");
+  if (terminalId && userId) return ctSendTerminalPush(terminalId, userId);
+  const selection = await ctPromptTerminalPush(terminalId);
+  if (!selection) return null;
+  return ctSendTerminalPush(selection.terminalId, selection.userId);
+}
+
+async function ctHandleTerminalPush(message) {
+  if (!message || game.user.isGM || String(message.targetUserId || "") !== String(game.user.id)) return null;
+  const sender = ctFindUser(message.senderId);
+  if (!sender?.active || !sender.isGM) {
+    console.warn(`${CT_ID} | Ignored a terminal push that did not come from an active GM.`);
+    return null;
+  }
+  const pushId = String(message.pushId || "");
+  if (!pushId || ctSeenTerminalPushes.has(pushId)) return null;
+  ctSeenTerminalPushes.add(pushId);
+  if (ctSeenTerminalPushes.size > 100) ctSeenTerminalPushes.delete(ctSeenTerminalPushes.values().next().value);
+  return ctOpenTerminal(String(message.terminalId || ""));
 }
 
 async function ctResolveTileDocument(value) {
@@ -2461,6 +2877,25 @@ async function ctCreateHelperMacro() {
   const img = `modules/${CT_ID}/assets/citinet-terminal.svg`;
   if (macro) await macro.update({ type: "script", command, img });
   else macro = await Macro.create({ name, type: "script", command, img, flags: { [CT_ID]: { launcher: true } } });
+  const matt = game.modules?.get(CT_MATT_ID);
+  if (matt && !ctVersionAtLeast(matt.version, CT_MATT_MIN_VERSION)) {
+    ui.notifications.warn(`Monk's Active Tile Triggers v${matt.version || "unknown"} is below CitiNET's supported v${CT_MATT_MIN_VERSION} minimum. Update Monk's before relying on Tile triggers.`);
+  } else if (matt && !ctVersionAtLeast(CT_MATT_MAX_VERSION, matt.version)) {
+    ui.notifications.warn(`Monk's Active Tile Triggers v${matt.version || "unknown"} is above CitiNET's Foundry v12 maximum of v${CT_MATT_MAX_VERSION}. Use CitiNET's native player push or install a Foundry v12-compatible Monk's release.`);
+  }
+  ui.notifications.info(`${macro?.name || name} is ready.`);
+  macro?.sheet?.render(true);
+  return macro;
+}
+
+async function ctCreatePushMacro() {
+  if (!game.user.isGM) return ui.notifications.warn("Only the GM can create the CitiNet push macro.");
+  const name = "CitiNet Terminal — Push to Player";
+  const command = "return game.citinetTerminal.pushTerminal();";
+  const img = `modules/${CT_ID}/assets/citinet-terminal.svg`;
+  let macro = game.macros.getName(name);
+  if (macro) await macro.update({ type: "script", command, img, flags: { [CT_ID]: { pushLauncher: true } } });
+  else macro = await Macro.create({ name, type: "script", command, img, flags: { [CT_ID]: { pushLauncher: true } } });
   ui.notifications.info(`${macro?.name || name} is ready.`);
   macro?.sheet?.render(true);
   return macro;
@@ -2504,6 +2939,7 @@ function ctBindSocket() {
       if (!game.user.isGM) ui.notifications.info("The GM reset this terminal's trace record.");
     }
     if (message.op === "trace-alert") ctHandleTraceAlert(message);
+    if (message.op === "push-terminal") ctHandleTerminalPush(message);
   });
   game.socket._citinetTerminalBound = CT_VERSION;
 }
@@ -2514,7 +2950,13 @@ function ctRefreshOpenWindows(terminalId = null, { skipEditor = false } = {}) {
     ctEditorApp.terminal = null;
     ctEditorApp.render(false);
   }
-  for (const [id, app] of ctPlayerApps) if (app.rendered && (!terminalId || id === terminalId)) app.render(false);
+  for (const app of ctPlayerAppInstances) {
+    if (app.rendered && (!terminalId || app.terminalId === terminalId)) app.render(false);
+  }
+}
+
+function ctRefreshActorContexts({ force = false } = {}) {
+  for (const app of ctPlayerAppInstances) app.refreshActorContext({ force });
 }
 
 function ctRefreshCalendarDisplays() {
@@ -2560,6 +3002,8 @@ Hooks.once("ready", () => {
     bindSelectedTiles: ctBindSelectedTiles,
     unbindSelectedTiles: ctUnbindSelectedTiles,
     createHelperMacro: ctCreateHelperMacro,
+    createPushMacro: ctCreatePushMacro,
+    pushTerminal: ctPushTerminal,
     loadDB: ctLoadDB,
     saveDB: ctSaveDB
   };
@@ -2585,6 +3029,22 @@ Hooks.on("getSceneControlButtons", controls => {
     visible: true,
     onClick: ctOpenManager
   });
+});
+
+Hooks.on("controlToken", () => {
+  ctRefreshActorContexts();
+});
+
+Hooks.on("updateUser", (user, changes) => {
+  if (String(user?.id || "") !== String(game.user?.id || "")) return;
+  if (!Object.hasOwn(changes || {}, "character")) return;
+  // The hook fires after Foundry applies the User update. Force a redraw even
+  // if a system returns the same Actor id through a newly hydrated document.
+  ctRefreshActorContexts({ force: true });
+});
+
+Hooks.on("canvasReady", () => {
+  ctRefreshActorContexts();
 });
 
 Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
@@ -2648,6 +3108,16 @@ Hooks.on("closeHBLPlayerApp", async (breachApp, resultData = null) => {
     return;
   }
 
+  const liveActor = ctGetActor();
+  const sameLiveActor = pending.actorUuid
+    ? String(liveActor?.uuid || "") === pending.actorUuid
+    : pending.actorId
+      ? String(liveActor?.id || "") === pending.actorId
+      : Boolean(liveActor);
+  if (!sameLiveActor || !ctIsNetrunner(liveActor)) {
+    return ui.notifications.warn("The active terminal operator changed during the breach; the content remains encrypted.");
+  }
+
   const db = await ctLoadDB();
   const terminal = db.terminals[pending.terminalId];
   const list = pending.kind === "email" ? terminal?.emails : terminal?.files;
@@ -2670,4 +3140,3 @@ Hooks.on("deleteTile", tile => {
 Hooks.on("updateTile", (_tile, changes) => {
   if (changes?.flags?.[CT_ID] !== undefined) ctRefreshOpenWindows();
 });
-
