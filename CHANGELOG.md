@@ -1,5 +1,50 @@
 # Changelog
 
+## 1.1.0-beta.6 — 2026-09-11
+
+- Fixed stale Netrunner authorization surviving a live player Character switch until that player refreshed Foundry. A player's assigned Character is now the authoritative CitiNET operator; a controlled Token is only the fallback when no Character is assigned, while GM Preview retains selected-Token priority.
+- Added player-client refresh handling for assigned-Character updates, controlled-Token changes, and canvas changes so an already-open decrypted page is immediately rebuilt against the new operator instead of remaining visible in stale HTML.
+- Added a final operator check to the Hexcode result handshake. Changing away from the Netrunner who started a breach before it resolves leaves the CitiNET content encrypted.
+- Preserved beta.5's bounded player-push selector and audited optional-module ranges without terminal data, unlock, trace, or Tile migration.
+
+## 1.1.0-beta.5 — 2026-09-10
+
+- Fixed long assigned-Character and owned Scene-Actor names expanding Foundry's native player dropdown beyond the push dialog. The dropdown now contains only a short player-account label, while full names appear in a bounded, scrollable, wrapping detail panel that updates with the selection.
+- Recorded the completed Foundry v12 compatibility audit: Monk's Active Tile Triggers supports v12.01–v12.02 and is verified at v12.02; Simple Calendar supports v2.4.17–v2.4.18 and is verified at v2.4.18.
+- Added an Unsupported Manager diagnostic for detected recommended-module versions above an audited maximum. Monk's v13.01 is intentionally outside this package's range because it targets Foundry v13.
+- Preserved beta.4's live-validated dependency-free one-player push, receiver-side Scene and Hexcode enforcement, read-only NET Architecture preview, and optional Tile automation without data migration.
+
+## 1.1.0-beta.4 — 2026-09-10
+
+- Added a native GM-to-player terminal push that works without Monk's Active Tile Triggers. Each terminal card now has a paper-plane button that opens that terminal for one selected connected player.
+- Added a compact target selector with one option per online non-GM user. The selector identifies each user's assigned Character and Actors they own through Tokens on the active Scene without duplicating users, omitting offline accounts, or hiding online players who do not currently own a Scene Token.
+- Added `CitiNet Terminal — Push to Player`, an optional generated GM hotbar Macro with terminal and player selectors, plus `game.citinetTerminal.pushTerminal(terminalId?, userId?)` for direct use.
+- Kept the receiver authoritative for access checks: Scene-local restrictions, publication state, Hexcode locks, Netrunner authorization, and read-only NET Architecture preview behavior are unchanged and cannot be bypassed by a push.
+- Kept Monk's v12.02 as an optional verified Tile-automation path. CitiNET's Manager, native push, direct API, security Files, NET Architecture previews, and calendar-offline fallback remain usable without recommended dependencies.
+- No terminal data, Tile binding, player unlock, trace, or content migration is required from beta.3.
+
+## 1.1.0-beta.3 — 2026-09-10
+
+- Fixed player previews reaching the native CPR NET Architecture sheet but being rejected by Foundry with `You do not have sufficient permission to view the sheet for this Item.`
+- Grants only the current viewer OWNER permission on the locally constructed in-memory preview Item so Foundry's sheet permission check can pass, while forcing the sheet to render read-only.
+- Keeps the preview parentless and non-persistent. No permission is added to the source Actor, source Item, or world, and the File's fresh Hexcode authorization check remains unchanged.
+- Prevented CitiNET's static settings default from requesting a Simple Calendar timestamp during Foundry's early `init` hook, before Simple Calendar has loaded its active calendar. Normal live timestamps and calendar displays are unchanged after `ready`.
+
+## 1.1.0-beta.2 — 2026-09-09
+
+- Fixed NET Architecture previews failing on player clients because beta.1 used Foundry's deprecated temporary `Document.create()` route, which the CPR Item class does not return as a sheet-ready document.
+- Constructed the snapshotted CPR `netarch` Item directly with Foundry v12's required `new Document()` path, assigns only a temporary local ID, and continues to render the native CPR sheet read-only without creating a world or Actor Item.
+- Preserved fresh-database Hexcode authorization checks before every preview. No lock, security status, Architecture, Tile, or world-data behavior changed.
+
+## 1.1.0-beta.1 — 2026-09-09
+
+- Added an optional Security System panel to Local Files with a GM-authored title and description plus a shared GM-controlled ONLINE, COMPROMISED, or OFFLINE status light.
+- Added drag-and-drop snapshots of native Cyberpunk RED `netarch` Items from Character sheets, world Items, and compendiums. Authorized players can open the snapshot in the native CPR sheet as a temporary read-only preview.
+- Kept the security profile behind the Local File's existing Hexcode Breach gate. A verified breach grants access but never changes the shared status, runs the NET Architecture, discovers devices, controls Tiles, or applies physical consequences.
+- Added Manager diagnostics for optional integrations, with Monk's Active Tile Triggers v12.02 as the tested Foundry v12 floor, Simple Calendar v2.4.18 as verified, and Hexcode Breach Lite v1.2.0 as verified. Recommended integrations keep an open maximum version.
+- Added a warning when creating the helper Macro with an installed Monk's Active Tile Triggers version older than v12.02. Monk's remains recommended rather than required.
+- Bumped the normalized world-data schema to 7. Existing Files receive a disabled empty Security System profile automatically; no manual migration is required.
+
 ## 1.0.1 — 2026-09-07
 
 - Fixed newly typed text in the native ProseMirror visual editor inheriting black text on CitiNET's black editor canvas.
