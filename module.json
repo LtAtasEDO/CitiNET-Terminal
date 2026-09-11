@@ -1,8 +1,8 @@
 {
   "id": "citinet-terminal",
   "title": "CitiNet Terminal™",
-  "description": "Scene-local or portable roleplay terminals for Cyberpunk RED with GM-authored inboxes, visual CitiNet pages, shared persistent RollTable files, Memory Chip-validated Shard exports, Autofixer vehicle purchases, trace states, and optional Hexcode Breach Lite locks.",
-  "version": "1.0.1",
+  "description": "Scene-local or portable roleplay terminals for Cyberpunk RED with native GM-to-player push, GM-authored inboxes, visual CitiNet pages, optional Hexcode-gated security-system and NET Architecture previews, shared persistent RollTable files, Memory Chip-validated Shard exports, Autofixer vehicle purchases, and trace states.",
+  "version": "1.1.0-beta.6",
   "authors": [
     {
       "name": "Lt Atlas"
@@ -30,19 +30,25 @@
         "type": "module",
         "compatibility": {
           "minimum": "2.4.17",
-          "verified": "2.4.18"
+          "verified": "2.4.18",
+          "maximum": "2.4.18"
         }
       },
       {
         "id": "monks-active-tiles",
-        "type": "module"
+        "type": "module",
+        "compatibility": {
+          "minimum": "12.01",
+          "verified": "12.02",
+          "maximum": "12.02"
+        }
       },
       {
         "id": "hexcode-breach-lite",
         "type": "module",
         "compatibility": {
           "minimum": "1.2.0",
-          "verified": "1.2.0"
+          "verified": "1.2.1"
         }
       }
     ]
@@ -57,5 +63,5 @@
   "readme": "README.md",
   "url": "https://github.com/LtAtasEDO/CitiNET-Terminal",
   "manifest": "https://github.com/LtAtasEDO/CitiNET-Terminal/releases/latest/download/module.json",
-  "download": "https://github.com/LtAtasEDO/CitiNET-Terminal/releases/download/1.0.1/module.zip"
+  "download": "https://github.com/LtAtasEDO/CitiNET-Terminal/releases/download/1.1.0-beta.6/module.zip"
 }
