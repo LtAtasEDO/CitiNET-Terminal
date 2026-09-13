@@ -324,6 +324,18 @@ await game.citinetTerminal.loadDB();
 
 Deleting and reinstalling the module folder does not erase world data. Back up the Foundry world before any major upgrade as normal.
 
+## Legal / Homebrew Content Policy
+
+This is unofficial homebrew content for use with Cyberpunk RED.
+
+This project is provided free of charge under the
+R. Talsorian Games Homebrew Content Policy.
+
+CitiNET Terminal is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.
+
+Cyberpunk RED and related properties are the property of
+R. Talsorian Games and their respective licensees.
+
 ## Credits and Asset Notice
 
 Created by **Lt Atlas** for Cyberpunk RED on Foundry VTT, with development assistance from AI.
