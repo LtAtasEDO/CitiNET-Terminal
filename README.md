@@ -1,8 +1,8 @@
-# CitiNET Terminal
+# CitiNET Terminal for use with Cyberpunk RED
 
 A fictional network, email, file, and vehicle-shop terminal system for **Foundry VTT v12** and the **Cyberpunk RED Core** system.
 
-CitiNET Terminal lets a GM build fixed computers or portable laptops, author player-facing content, bind terminals to Scene Tiles, protect emails and files with Hexcode Breach Lite, preview native CPR NET Architectures, export data to Memory Chips, and run Autofixer vehicle listings without sending players outside Foundry.
+CitiNET Terminal for use with Cyberpunk RED lets a GM build fixed computers or portable laptops, author player-facing content, bind terminals to Scene Tiles, protect emails and files with Hexcode Breach Lite, preview native CPR NET Architectures, export data to Memory Chips, and run Autofixer vehicle listings without sending players outside Foundry.
 
 > **Beta release v1.1.0-beta.6.** This test beta keeps the dependency-free GM-to-player terminal push, lightweight security-system Files, and read-only CPR NET Architecture previews. Beta.6 makes a player's assigned Character the authoritative terminal operator, refreshes open CitiNET windows when that assignment or the fallback controlled Token changes, and closes the stale-role access path found during live switching tests. Existing v0.7.x, v0.8.0 beta, v1.0.0, v1.0.1, and earlier v1.1.0 betas require no migration.
 
@@ -331,7 +331,7 @@ This is unofficial homebrew content for use with Cyberpunk RED.
 This project is provided free of charge under the
 R. Talsorian Games Homebrew Content Policy.
 
-CitiNET Terminal is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.
+CitiNET Terminal for use with Cyberpunk RED is unofficial content provided under the Homebrew Content Policy of R. Talsorian Games and is not approved or endorsed by RTG. This content references materials that are the property of R. Talsorian Games and its licensees.
 
 Cyberpunk RED and related properties are the property of
 R. Talsorian Games and their respective licensees.
